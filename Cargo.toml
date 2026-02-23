@@ -13,6 +13,7 @@ members = [
     "crates/audit-log",
     "crates/skills",
     "crates/web-ui",
+    "crates/multi-user",
 ]
 
 [workspace.package]

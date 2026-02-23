@@ -2198,6 +2198,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "safeagent-multi-user"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "safeagent-policy-engine"
 version = "0.1.0"
 dependencies = [
@@ -2257,6 +2268,7 @@ dependencies = [
  "tokio",
  "tower-http",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
