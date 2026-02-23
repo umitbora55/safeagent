@@ -10,6 +10,7 @@ mod pricing;
 mod circuit_breaker;
 mod shutdown;
 mod encryption;
+mod providers;
 
 use anyhow::Result;
 use safeagent_bridge_common::*;
