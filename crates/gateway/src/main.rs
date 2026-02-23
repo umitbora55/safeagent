@@ -7,6 +7,8 @@ mod cmd_audit;
 mod cmd_export_logs;
 mod cmd_export;
 mod pricing;
+mod circuit_breaker;
+mod shutdown;
 
 use anyhow::Result;
 use safeagent_bridge_common::*;
