@@ -304,9 +304,39 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
         }
 
         let start = std::time::Instant::now();
-        match call_anthropic(
+
+        // Build fallback chain: current model -> lower tiers
+        let fallback_chain = build_fallback_chain(&model, &available_models);
+
+        let mut final_model = model.clone();
+        let mut api_result = call_anthropic(
             &http_client, &model, &api_key, &request, &dynamic_system_context,
-        ).await {
+        ).await;
+
+        // Fallback on retryable errors (429, 500, 529, 503)
+        if api_result.is_err() {
+            let err_str = format!("{}", api_result.as_ref().unwrap_err());
+            let is_retryable = err_str.contains("429") || err_str.contains("500")
+                || err_str.contains("529") || err_str.contains("503")
+                || err_str.contains("overloaded") || err_str.contains("Overloaded");
+
+            if is_retryable && !fallback_chain.is_empty() {
+                for fallback in &fallback_chain {
+                    println!("  ⚡ {} unavailable, falling back to {}",
+                        final_model.model_name, fallback.model_name);
+                    final_model = fallback.clone();
+                    let mut fb_request = request.clone();
+                    apply_tier_request_tuning(&mut fb_request, fallback.tier);
+                    api_result = call_anthropic(
+                        &http_client, fallback, &api_key, &fb_request, &dynamic_system_context,
+                    ).await;
+                    if api_result.is_ok() { break; }
+                }
+            }
+        }
+
+        let model = final_model;
+        match api_result {
             Ok(response) => {
                 let latency = start.elapsed().as_millis() as u64;
                 let cost = LlmRouter::calculate_cost(&model, response.input_tokens, response.output_tokens);
@@ -659,6 +689,7 @@ fn supports_color() -> bool {
     std::env::var("TERM").map(|v| v != "dumb").unwrap_or(false)
 }
 
+#[derive(Debug)]
 struct ApiResponse {
     content: String,
     input_tokens: u32,
@@ -1145,6 +1176,24 @@ fn default_models() -> Vec<ModelConfig> {
             supports_vision: true, supports_tools: true,
         },
     ]
+}
+
+fn build_fallback_chain(current: &ModelConfig, all_models: &[ModelConfig]) -> Vec<ModelConfig> {
+    let current_rank = match current.tier {
+        ModelTier::Premium => 2,
+        ModelTier::Standard => 1,
+        ModelTier::Economy => 0,
+    };
+    // Fallback: try lower tiers first (cheaper), then same tier alternatives
+    let mut candidates: Vec<&ModelConfig> = all_models.iter()
+        .filter(|m| m.id != current.id)
+        .collect();
+    candidates.sort_by_key(|m| {
+        let rank = match m.tier { ModelTier::Premium => 2, ModelTier::Standard => 1, ModelTier::Economy => 0 };
+        // Prefer models closer to current tier but lower
+        if rank < current_rank { current_rank - rank } else { rank + 10 }
+    });
+    candidates.into_iter().cloned().collect()
 }
 
 fn get_data_dir() -> PathBuf {
