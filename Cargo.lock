@@ -1498,6 +1498,7 @@ dependencies = [
  "safeagent-memory",
  "safeagent-policy-engine",
  "safeagent-prompt-guard",
+ "safeagent-skills",
  "serde",
  "serde_json",
  "tokio",
@@ -1559,6 +1560,21 @@ dependencies = [
  "serde_json",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "safeagent-skills"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
