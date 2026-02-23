@@ -261,12 +261,41 @@ fn classify_task(lower: &str, original: &str) -> TaskType {
         return TaskType::DeepReasoning;
     }
 
-    // Architecture / design
+    // Architecture / design — expanded to catch complex system design
     if has_any(lower, &[
         "architect", "mimari", "design system", "sistem tasarla",
         "infrastructure", "altyapı", "scalab", "ölçeklen",
+        "distributed", "dağıtık", "multi-tenant", "multi-region",
+        "cache invalidation", "data centers", "replication",
+        "consensus algorithm", "raft", "paxos",
+        "zero-downtime", "failover", "load balanc",
+        "microservice", "event-driven", "event sourcing",
+        "end-to-end encrypt", "forward secrecy",
+        "real-time", "low latency", "microsecond",
+        "auto-scal", "canary deploy", "chaos engineer",
+        "active-active", "read-write split",
+        "collaborative editing", "conflict resolution",
+        "cdn", "content delivery",
+        "streaming pipeline", "exactly-once",
+        "api gateway",
     ]) {
         return TaskType::Architecture;
+    }
+    // Complex implementation — compiler, allocator, interpreter, optimizer
+    if has_any(lower, &[
+        "compiler", "lexer", "parser", "ast",
+        "bytecode", "interpreter",
+        "memory allocator", "custom allocator", "lock-free",
+        "concurrent data structure",
+        "query optimizer", "execution plan",
+        "b-tree", "mvcc", "btree",
+        "neural network", "automatic differentiation", "backpropagation",
+        "garbage collect", "formal verification",
+        "trading system",
+        "tracing system", "distributed trac",
+        "connection pool",
+    ]) {
+        return TaskType::DeepReasoning;
     }
 
     // Scientific
