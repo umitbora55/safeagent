@@ -1,6 +1,8 @@
 mod cmd_init;
 mod cmd_doctor;
 mod cmd_stats;
+mod config;
+use config::SafeAgentConfig;
 mod cmd_audit;
 
 use anyhow::Result;
@@ -82,6 +84,13 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
         .with_target(false)
         .init();
 
+    // Load config
+    let config_path = data_dir.join("safeagent.toml");
+    let app_config = SafeAgentConfig::load(&config_path).unwrap_or_default();
+    if config_path.exists() {
+        tracing::info!("Config loaded from {:?}", config_path);
+    }
+
     println!();
     println!("  🛡️  SafeAgent v{}", VERSION);
     println!("  Secure AI Assistant");
@@ -92,7 +101,10 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
     tracing::info!("Data dir: {:?}", data_dir);
 
     let memory = Arc::new(MemoryStore::new(data_dir.join("memory.db"))?);
-    let policy = Arc::new(PolicyEngine::new(PolicyConfig::default()));
+    let mut policy_config = PolicyConfig::default();
+    policy_config.daily_spend_limit_microdollars = app_config.daily_spend_limit_microdollars();
+    policy_config.monthly_spend_limit_microdollars = app_config.monthly_spend_limit_microdollars();
+    let policy = Arc::new(PolicyEngine::new(policy_config));
     let guard = Arc::new(PromptGuard::with_defaults());
     let vault = Arc::new(CredentialVault::new(data_dir.join("vault.db"))?);
     let ledger = Arc::new(CostLedger::new(data_dir.join("cost_ledger.db"))
@@ -107,7 +119,12 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
     let api_key = get_or_prompt_key(&vault, "anthropic_key", "Anthropic API Key", "anthropic", "sk-ant-...")?;
 
     let available_models = default_models();
-    let router = Arc::new(LlmRouter::new(available_models.clone(), RoutingMode::Balanced));
+    let routing_mode = match app_config.router.mode.as_str() {
+        "economy" => RoutingMode::Economy,
+        "performance" => RoutingMode::Performance,
+        _ => RoutingMode::Balanced,
+    };
+    let router = Arc::new(LlmRouter::new(available_models.clone(), routing_mode));
     let centroids = load_centroids().expect("Failed to load centroids");
     println!("  🧭 Embedding centroids loaded (3x1024)");
     let embedding_cache: std::sync::Arc<Mutex<HashMap<String, Vec<f32>>>> = std::sync::Arc::new(
