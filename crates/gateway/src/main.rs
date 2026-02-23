@@ -5,6 +5,7 @@ mod config;
 use config::SafeAgentConfig;
 mod cmd_audit;
 mod cmd_export_logs;
+mod cmd_export;
 
 use anyhow::Result;
 use safeagent_bridge_common::*;
@@ -50,6 +51,8 @@ enum Commands {
     Audit,
     /// Export anonymized logs for metrics
     ExportLogs,
+    /// Export conversation as Markdown/JSON
+    Export,
     /// Start the assistant (default if no command given)
     Run,
 }
@@ -74,6 +77,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::ExportLogs) => {
             cmd_export_logs::run_export_logs(&data_dir)
+        }
+        Some(Commands::Export) => {
+            cmd_export::run_export(&data_dir)
         }
         Some(Commands::Run) | None => {
             run_agent(data_dir).await
@@ -523,6 +529,25 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
                     token_count: Some(response.output_tokens),
                 };
                 let _ = memory.add_message(&assistant_entry);
+
+                // Auto-summarization: compress old messages when conversation gets long
+                if memory.should_summarize(&incoming.chat_id, 20) {
+                    if let Ok(old_msgs) = memory.messages_to_summarize(&incoming.chat_id, 10) {
+                        if !old_msgs.is_empty() {
+                            let summary_input: String = old_msgs.iter()
+                                .map(|m| format!("{}: {}", m.role.as_str(), m.content))
+                                .collect::<Vec<_>>()
+                                .join("\n");
+                            let pruned_ids: Vec<String> = old_msgs.iter().map(|m| m.id.0.clone()).collect();
+                            let summary_text = format!(
+                                "Previous conversation covered: {}",
+                                if summary_input.len() > 500 { &summary_input[..500] } else { &summary_input }
+                            );
+                            let _ = memory.store_summary_and_prune(&incoming.chat_id, &summary_text, &pruned_ids);
+                            tracing::info!("Auto-summarized {} old messages", pruned_ids.len());
+                        }
+                    }
+                }
             }
             Err(e) => {
                 router.record_model_error(&model.id);
