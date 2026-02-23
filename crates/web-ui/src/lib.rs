@@ -16,6 +16,7 @@ pub struct AppState {
     pub audit: Option<AuditLog>,
     pub memory: Option<MemoryStore>,
     pub version: String,
+    pub config_path: Option<std::path::PathBuf>,
     pub start_time: chrono::DateTime<chrono::Utc>,
 }
 
@@ -26,6 +27,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/stats", get(api_stats))
         .route("/api/audit", get(api_audit))
         .route("/api/conversations", get(api_conversations))
+        .route("/api/settings", get(api_settings))
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
@@ -145,6 +147,21 @@ async fn api_conversations(State(state): State<Arc<AppState>>) -> impl IntoRespo
     Json(serde_json::json!({"messages": messages, "count": messages.len()}))
 }
 
+async fn api_settings(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let config_content = match &state.config_path {
+        Some(path) if path.exists() => {
+            std::fs::read_to_string(path).unwrap_or_else(|_| "# Failed to read config".into())
+        }
+        Some(path) => format!("# Config file not found: {}", path.display()),
+        None => "# No config path set".into(),
+    };
+
+    Json(serde_json::json!({
+        "config_path": state.config_path.as_ref().map(|p| p.display().to_string()),
+        "config_content": config_content,
+    }))
+}
+
 // ─── Dashboard HTML ─────────────────────────────────────
 
 async fn dashboard_page(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -207,6 +224,7 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> impl IntoResponse
             <button class="tab active" onclick="showTab('models')">📊 Models</button>
             <button class="tab" onclick="showTab('audit')">📋 Audit Log</button>
             <button class="tab" onclick="showTab('chat')">💬 Conversations</button>
+            <button class="tab" onclick="showTab('settings')">⚙️ Settings</button>
         </div>
 
         <!-- Models Table -->
@@ -219,6 +237,12 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> impl IntoResponse
         <div id="tab-audit" class="section" style="display:none;">
             <h2>Recent Audit Log</h2>
             <div id="audit-table">Loading...</div>
+        </div>
+
+        <!-- Settings -->
+        <div id="tab-settings" class="section" style="display:none;">
+            <h2>Configuration (safeagent.toml)</h2>
+            <pre id="settings-content" style="background:#0f172a;padding:1rem;border-radius:8px;overflow-x:auto;font-size:0.8rem;color:#94a3b8;"></pre>
         </div>
 
         <!-- Chat History -->
@@ -237,7 +261,7 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> impl IntoResponse
         }}
 
         async function refreshAll() {{
-            await Promise.all([loadStats(), loadAudit(), loadChat()]);
+            await Promise.all([loadStats(), loadAudit(), loadChat(), loadSettings()]);
         }}
 
         async function loadStats() {{
@@ -279,6 +303,16 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> impl IntoResponse
                 document.getElementById('audit-table').innerHTML = t;
             }} catch(e) {{
                 document.getElementById('audit-table').innerHTML = 'Failed to load.';
+            }}
+        }}
+
+        async function loadSettings() {{
+            try {{
+                const r = await fetch('/api/settings');
+                const d = await r.json();
+                document.getElementById('settings-content').textContent = d.config_content || 'No config found.';
+            }} catch(e) {{
+                document.getElementById('settings-content').textContent = 'Failed to load.';
             }}
         }}
 
