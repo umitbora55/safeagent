@@ -1426,6 +1426,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "safeagent-cost-ledger"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "safeagent-credential-vault"
 version = "0.1.0"
 dependencies = [
@@ -1456,6 +1467,7 @@ dependencies = [
  "reqwest",
  "safeagent-bridge-common",
  "safeagent-bridge-telegram",
+ "safeagent-cost-ledger",
  "safeagent-credential-vault",
  "safeagent-llm-router",
  "safeagent-memory",
