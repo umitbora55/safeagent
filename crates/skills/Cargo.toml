@@ -13,6 +13,7 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 regex = "1"
+url = "2"
 async-imap = "0.10"
 async-native-tls = "0.5"
 futures = "0.3"
