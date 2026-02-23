@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeAgent</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0f172a; --bg2: #1e293b; --bg3: #334155;
+            --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+            --accent: #38bdf8; --accent2: #0ea5e9;
+            --green: #22c55e; --red: #ef4444; --orange: #f59e0b;
+            --border: #475569;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; }
+
+        /* Sidebar */
+        .sidebar { width: 260px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        .sidebar-header { padding: 1.25rem; border-bottom: 1px solid var(--border); }
+        .sidebar-header h1 { font-size: 1.1rem; color: var(--accent); display: flex; align-items: center; gap: 0.5rem; }
+        .sidebar-header .version { font-size: 0.65rem; background: var(--bg3); padding: 2px 8px; border-radius: 99px; color: var(--text2); }
+        .nav { flex: 1; padding: 0.75rem; }
+        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 8px; cursor: pointer; color: var(--text2); font-size: 0.875rem; transition: all 0.15s; margin-bottom: 2px; }
+        .nav-item:hover { background: var(--bg3); color: var(--text); }
+        .nav-item.active { background: var(--accent); color: #0f172a; font-weight: 600; }
+        .nav-item .icon { width: 20px; text-align: center; }
+        .sidebar-footer { padding: 1rem; border-top: 1px solid var(--border); }
+        .status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text2); }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+
+        /* Main */
+        .main { flex: 1; display: flex; flex-direction: column; }
+        .topbar { padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--bg2); }
+        .topbar h2 { font-size: 1rem; font-weight: 500; }
+        .content { flex: 1; overflow-y: auto; padding: 1.5rem; }
+
+        /* Chat */
+        .chat-container { display: flex; flex-direction: column; height: 100%; }
+        .messages { flex: 1; overflow-y: auto; padding-bottom: 1rem; }
+        .msg { max-width: 75%; margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.9rem; line-height: 1.5; }
+        .msg-user { background: var(--accent2); color: white; margin-left: auto; border-bottom-right-radius: 4px; }
+        .msg-ai { background: var(--bg2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+        .msg-role { font-size: 0.65rem; color: var(--text3); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .input-area { display: flex; gap: 0.75rem; padding: 1rem 0 0; border-top: 1px solid var(--border); }
+        .input-area input { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 1rem; color: var(--text); font-size: 0.9rem; outline: none; }
+        .input-area input:focus { border-color: var(--accent); }
+        .input-area button { background: var(--accent); color: #0f172a; border: none; border-radius: 10px; padding: 0.75rem 1.25rem; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+        .input-area button:hover { background: var(--accent2); }
+
+        /* Cards */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+        .card h3 { font-size: 0.7rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
+        .card .value { font-size: 1.75rem; font-weight: 700; }
+        .card .sub { font-size: 0.8rem; color: var(--text3); margin-top: 0.25rem; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 0.6rem; color: var(--text3); font-size: 0.7rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+        td { padding: 0.6rem; border-bottom: 1px solid var(--bg3); font-size: 0.85rem; }
+        tr:hover { background: var(--bg3); }
+
+        /* Section */
+        .section { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+        .section h3 { font-size: 0.9rem; margin-bottom: 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border); }
+
+        .badge-green { color: var(--green); } .badge-red { color: var(--red); }
+        pre { background: var(--bg); padding: 1rem; border-radius: 8px; overflow-x: auto; font-size: 0.8rem; color: var(--text2); }
+
+        /* Typing indicator */
+        .typing { display: flex; gap: 4px; padding: 0.5rem; }
+        .typing span { width: 8px; height: 8px; background: var(--text3); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce { 0%,80%,100% { transform: scale(0); } 40% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1>🛡️ SafeAgent <span class="version">v0.1.0</span></h1>
+        </div>
+        <div class="nav">
+            <div class="nav-item active" onclick="showPage('chat')"><span class="icon">💬</span> Chat</div>
+            <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">📊</span> Dashboard</div>
+            <div class="nav-item" onclick="showPage('audit')"><span class="icon">📋</span> Audit Log</div>
+            <div class="nav-item" onclick="showPage('skills')"><span class="icon">⚡</span> Skills</div>
+            <div class="nav-item" onclick="showPage('settings')"><span class="icon">⚙️</span> Settings</div>
+        </div>
+        <div class="sidebar-footer">
+            <div class="status"><span class="status-dot"></span> Connected — Balanced Mode</div>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="topbar">
+            <h2 id="page-title">Chat</h2>
+            <div style="font-size:0.8rem;color:var(--text3);" id="topbar-info">Streaming Enabled</div>
+        </div>
+
+        <!-- Chat Page -->
+        <div class="content" id="page-chat" style="padding:0;">
+            <div class="chat-container" style="height:100%;padding:1.5rem;">
+                <div class="messages" id="messages">
+                    <div class="msg msg-ai">
+                        <div class="msg-role">🤖 SafeAgent</div>
+                        Merhaba! Ben SafeAgent — guvenli, maliyet-optimize AI asistanin. Nasil yardimci olabilirim?
+                    </div>
+                </div>
+                <div class="input-area">
+                    <input type="text" id="chat-input" placeholder="Mesajinizi yazin..." onkeydown="if(event.key==='Enter')sendMessage()">
+                    <button onclick="sendMessage()">Gonder</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Page -->
+        <div class="content" id="page-dashboard" style="display:none;">
+            <div class="grid" id="stat-cards">
+                <div class="card"><h3>Total Requests</h3><div class="value" id="stat-requests">0</div></div>
+                <div class="card"><h3>Total Cost</h3><div class="value" id="stat-cost">$0.00</div><div class="sub">USD</div></div>
+                <div class="card"><h3>Input Tokens</h3><div class="value" id="stat-input">0</div></div>
+                <div class="card"><h3>Output Tokens</h3><div class="value" id="stat-output">0</div></div>
+                <div class="card"><h3>Cache Hits</h3><div class="value" id="stat-cache">0</div><div class="sub">tokens read from cache</div></div>
+                <div class="card"><h3>Routing Accuracy</h3><div class="value">97.5%</div><div class="sub">140 prompt eval</div></div>
+            </div>
+            <div class="section">
+                <h3>Model Usage</h3>
+                <table>
+                    <tr><th>Model</th><th>Tier</th><th>Requests</th><th>Cost</th></tr>
+                    <tr><td>claude-haiku-4-5</td><td>Economy</td><td id="m-haiku-req">0</td><td id="m-haiku-cost">$0.00</td></tr>
+                    <tr><td>claude-sonnet-4-5</td><td>Standard</td><td id="m-sonnet-req">0</td><td id="m-sonnet-cost">$0.00</td></tr>
+                    <tr><td>claude-opus-4-6</td><td>Premium</td><td id="m-opus-req">0</td><td id="m-opus-cost">$0.00</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Audit Page -->
+        <div class="content" id="page-audit" style="display:none;">
+            <div class="section">
+                <h3>Recent Events</h3>
+                <table>
+                    <tr><th>Time</th><th>Event</th><th>Model</th><th>Tokens</th><th>Cost</th><th>Status</th></tr>
+                    <tbody id="audit-body">
+                        <tr><td colspan="6" style="color:var(--text3);text-align:center;">No events yet. Start chatting to generate audit entries.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Skills Page -->
+        <div class="content" id="page-skills" style="display:none;">
+            <div class="grid">
+                <div class="card"><h3>Read Skills</h3><div class="value" style="font-size:1.2rem;">
+                    ✅ Web Search<br>✅ URL Fetcher<br>✅ File Reader<br>✅ Calendar Reader<br>✅ Email Reader<br>✅ Image Processor
+                </div></div>
+                <div class="card"><h3>Write Skills</h3><div class="value" style="font-size:1.2rem;">
+                    🔒 File Writer<br>🔒 Calendar Writer<br>🔒 Email Sender<br>🔒 Browser Control<br>�� Shell Executor
+                </div><div class="sub">Deny-all by default. Enable in settings.</div></div>
+                <div class="card"><h3>Voice</h3><div class="value" style="font-size:1.2rem;">
+                    ✅ Whisper STT<br>✅ OpenAI TTS
+                </div></div>
+            </div>
+            <div class="section">
+                <h3>MCP Server</h3>
+                <p style="color:var(--text2);font-size:0.85rem;">
+                    MCP endpoint: <code>http://localhost:18789/mcp</code><br>
+                    8 tools exposed via JSON-RPC 2.0. Use with Claude Desktop, Cursor, or any MCP client.
+                </p>
+            </div>
+        </div>
+
+        <!-- Settings Page -->
+        <div class="content" id="page-settings" style="display:none;">
+            <div class="section">
+                <h3>Configuration (safeagent.toml)</h3>
+                <pre id="config-display">[general]
+log_level = "info"
+
+[router]
+mode = "balanced"
+confidence_preset = "balanced"
+
+[limits]
+daily_spend_usd = 5.0
+monthly_spend_usd = 50.0
+
+[skills.web_search]
+enabled = true
+
+[skills.file_writer]
+enabled = false
+allowed_dirs = []
+
+[skills.email_sender]
+enabled = false
+allowed_recipients = []
+daily_limit = 20
+require_confirmation = true
+
+[skills.browser_control]
+enabled = false
+allowed_domains = []
+
+[skills.shell_executor]
+enabled = false
+allowed_commands = []</pre>
+            </div>
+            <div class="section">
+                <h3>Security</h3>
+                <p style="color:var(--text2);font-size:0.85rem;">
+                    🔐 AES-256 Encrypted Vault (Argon2id KDF)<br>
+                    🛡️ Prompt Injection Guard (normalized matching)<br>
+                    �� Full Audit Logging (secret redaction)<br>
+                    🔑 OS Keychain Integration (macOS/Linux)
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showPage(page) {
+            document.querySelectorAll('.content').forEach(p => p.style.display = 'none');
+            document.getElementById('page-' + page).style.display = '';
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            const titles = { chat: 'Chat', dashboard: 'Dashboard', audit: 'Audit Log', skills: 'Skills', settings: 'Settings' };
+            document.getElementById('page-title').textContent = titles[page] || page;
+        }
+
+        let messages = [];
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+
+            const container = document.getElementById('messages');
+            container.innerHTML += `<div class="msg msg-user"><div class="msg-role">👤 You</div>${escapeHtml(text)}</div>`;
+            container.innerHTML += `<div class="msg msg-ai" id="typing"><div class="typing"><span></span><span></span><span></span></div></div>`;
+            container.scrollTop = container.scrollHeight;
+
+            // Simulate response (in real app, this calls the backend)
+            setTimeout(() => {
+                const typing = document.getElementById('typing');
+                if (typing) {
+                    typing.innerHTML = `<div class="msg-role">🤖 SafeAgent</div>Bu bir demo gorunumdur. Gercek kullanim icin <code>safeagent run</code> calistirin ve Web UI'a <code>http://localhost:18789</code> uzerinden baglanin.`;
+                    typing.removeAttribute('id');
+                }
+                container.scrollTop = container.scrollHeight;
+            }, 1500);
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        // Fetch stats from backend if available
+        async function loadStats() {
+            try {
+                const r = await fetch('http://localhost:18789/api/stats');
+                const d = await r.json();
+                if (d.summary) {
+                    document.getElementById('stat-requests').textContent = d.summary.total_requests || 0;
+                    document.getElementById('stat-cost').textContent = '$' + (d.summary.total_cost_usd || '0.0000');
+                    document.getElementById('stat-input').textContent = (d.summary.total_input_tokens || 0).toLocaleString();
+                    document.getElementById('stat-output').textContent = (d.summary.total_output_tokens || 0).toLocaleString();
+                    document.getElementById('stat-cache').textContent = (d.summary.cache_read_tokens || 0).toLocaleString();
+                }
+            } catch(e) { /* backend not running */ }
+        }
+        loadStats();
+        setInterval(loadStats, 10000);
+    </script>
+</body>
+</html>

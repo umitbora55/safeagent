@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/dev/.schema/config.schema.json",
+  "productName": "SafeAgent",
+  "version": "0.1.0",
+  "identifier": "com.safeagent.app",
+  "build": {
+    "frontendDist": "../desktop-ui"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "SafeAgent — AI Assistant",
+        "width": 1100,
+        "height": 750,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png"
+    ]
+  }
+}
