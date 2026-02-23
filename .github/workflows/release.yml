@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            binary: safeagent
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            binary: safeagent
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            binary: safeagent
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package binary
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
+          cd dist
+          tar czf safeagent-${{ github.ref_name }}-${{ matrix.target }}.tar.gz ${{ matrix.binary }}
+          shasum -a 256 safeagent-${{ github.ref_name }}-${{ matrix.target }}.tar.gz > safeagent-${{ github.ref_name }}-${{ matrix.target }}.tar.gz.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: safeagent-${{ matrix.target }}
+          path: dist/safeagent-${{ github.ref_name }}-${{ matrix.target }}.*
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx
+
+      - name: Generate SBOM
+        run: cargo cyclonedx --format json --output-file safeagent-sbom.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: safeagent-sbom.json
+
+  release:
+    name: Create Release
+    needs: [build, sbom]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect release files
+        run: |
+          mkdir -p release-files
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.sha256' -o -name '*.json' \) -exec cp {} release-files/ \;
+          echo "## SHA-256 Checksums" > release-files/CHECKSUMS.txt
+          echo "" >> release-files/CHECKSUMS.txt
+          cat release-files/*.sha256 >> release-files/CHECKSUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-files/*
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
