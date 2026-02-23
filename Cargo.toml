@@ -14,6 +14,7 @@ members = [
     "crates/skills",
     "crates/web-ui",
     "crates/multi-user",
+    "desktop",
 ]
 
 [workspace.package]

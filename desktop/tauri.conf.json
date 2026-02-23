@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/dev/.schema/config.schema.json",
   "productName": "SafeAgent",
   "version": "0.1.0",
-  "identifier": "com.safeagent.app",
+  "identifier": "com.safeagent.desktop",
   "build": {
     "frontendDist": "../desktop-ui"
   },
