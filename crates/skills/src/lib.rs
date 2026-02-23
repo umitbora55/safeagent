@@ -10,6 +10,7 @@ pub mod email_sender;
 pub mod voice;
 pub mod browser_control;
 pub mod shell_executor;
+pub mod image_processor;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -88,6 +89,14 @@ pub trait Skill: Send + Sync {
 
     /// Execute the skill with given input.
     async fn execute(&self, input: &str) -> SkillResult;
+}
+
+/// Re-validate URL after redirect to prevent DNS rebinding attacks.
+/// Call this after following redirects to ensure the resolved IP is still safe.
+pub fn validate_url_post_redirect(final_url: &str) -> Result<(), String> {
+    // Same validation as initial URL check — blocks private IPs after redirect
+    validate_url(final_url)?;
+    Ok(())
 }
 
 /// Check if an IP address is private/reserved (SSRF protection).

@@ -286,6 +286,34 @@ impl PromptGuard {
             source,
         }
     }
+
+    /// Sanitize tool/skill output before inserting into LLM context.
+    pub fn sanitize_tool_output(&self, skill_id: &str, output: &str) -> String {
+        let mut sanitized = output.to_string();
+        let injection_patterns = [
+            "ignore previous instructions", "ignore all instructions",
+            "disregard your instructions", "you are now",
+            "new instructions:", "system prompt:", "SYSTEM:",
+            "<|im_start|>", "<|im_end|>", "[INST]", "[/INST]",
+        ];
+        for pattern in &injection_patterns {
+            let lower_s = sanitized.to_lowercase();
+            let lower_p = pattern.to_lowercase();
+            if lower_s.contains(&lower_p) {
+                let mut result = String::new();
+                let mut from = 0;
+                while let Some(pos) = lower_s[from..].find(&lower_p) {
+                    let abs = from + pos;
+                    result.push_str(&sanitized[from..abs]);
+                    result.push_str("[FILTERED]");
+                    from = abs + lower_p.len();
+                }
+                result.push_str(&sanitized[from..]);
+                sanitized = result;
+            }
+        }
+        format!("<tool_output skill=\"{}\">{}</tool_output>", skill_id, sanitized)
+    }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

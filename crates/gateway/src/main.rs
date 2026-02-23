@@ -6,6 +6,7 @@ use config::SafeAgentConfig;
 mod cmd_audit;
 mod cmd_export_logs;
 mod cmd_export;
+mod pricing;
 
 use anyhow::Result;
 use safeagent_bridge_common::*;
@@ -53,6 +54,8 @@ enum Commands {
     ExportLogs,
     /// Export conversation as Markdown/JSON
     Export,
+    /// Show or update model pricing
+    Pricing,
     /// Start the assistant (default if no command given)
     Run,
 }
@@ -80,6 +83,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Export) => {
             cmd_export::run_export(&data_dir)
+        }
+        Some(Commands::Pricing) => {
+            pricing::run_pricing_command(&data_dir, None).map_err(|e| anyhow::anyhow!(e))
         }
         Some(Commands::Run) | None => {
             run_agent(data_dir).await
