@@ -248,8 +248,10 @@ mod tests {
 
     fn temp_ledger() -> CostLedger {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_nanos();
-        let path = std::env::temp_dir().join(format!("safeagent_ledger_test_{}.db", nanos));
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let path = std::env::temp_dir().join(format!("safeagent_ledger_test_{}_{}.db", nanos, id));
         CostLedger::new(path).unwrap()
     }
 
