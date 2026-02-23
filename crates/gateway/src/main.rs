@@ -341,9 +341,34 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
         let fallback_chain = build_fallback_chain(&model, &available_models);
 
         let mut final_model = model.clone();
-        let mut api_result = call_anthropic(
-            &http_client, &model, &api_key, &request, &dynamic_system_context,
-        ).await;
+        let mut api_result = if incoming.platform == Platform::Cli {
+            // Streaming for CLI
+            let (token_tx, mut token_rx) = tokio::sync::mpsc::channel::<String>(256);
+            let http_c = http_client.clone();
+            let model_c = model.clone();
+            let api_key_c = api_key.clone();
+            let req_c = request.clone();
+            let dyn_ctx = dynamic_system_context.clone();
+
+            let stream_handle = tokio::spawn(async move {
+                call_anthropic_streaming(&http_c, &model_c, &api_key_c, &req_c, &dyn_ctx, &token_tx).await
+            });
+
+            // Print tokens as they arrive
+            print!("  🤖 [{}] ", model.model_name);
+            let _ = io::stdout().flush();
+            while let Some(token) = token_rx.recv().await {
+                print!("{}", token);
+                let _ = io::stdout().flush();
+            }
+            println!();
+
+            stream_handle.await.unwrap_or_else(|e| Err(anyhow::anyhow!("Stream task failed: {}", e)))
+        } else {
+            call_anthropic(
+                &http_client, &model, &api_key, &request, &dynamic_system_context,
+            ).await
+        };
 
         // Fallback on retryable errors (429, 500, 529, 503)
         if api_result.is_err() {
@@ -451,7 +476,7 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
                 );
 
                 if incoming.platform == Platform::Cli {
-                    println!("  🤖 [{}] {}", model.model_name, response.content);
+                    // Content already streamed token-by-token above
                     println!(
                         "  └─ {}in/{}out | ${:.4} | {}ms | session ${:.4} | today ${:.4}",
                         response.input_tokens, response.output_tokens,
@@ -1037,6 +1062,117 @@ async fn call_anthropic(
         content: data["content"][0]["text"].as_str().unwrap_or("").to_string(),
         input_tokens: usage["input_tokens"].as_u64().unwrap_or(0) as u32,
         output_tokens: usage["output_tokens"].as_u64().unwrap_or(0) as u32,
+        cache_creation_input_tokens,
+        cache_read_input_tokens,
+    })
+}
+
+async fn call_anthropic_streaming(
+    client: &reqwest::Client, model: &ModelConfig, api_key: &SensitiveString,
+    request: &LlmRequest, dynamic_system_context: &str,
+    on_token: &tokio::sync::mpsc::Sender<String>,
+) -> Result<ApiResponse> {
+    let messages = build_anthropic_messages_with_breakpoint(&request.messages);
+
+    let system_blocks = if dynamic_system_context.trim().is_empty() {
+        serde_json::json!([{
+            "type": "text", "text": request.system_prompt,
+            "cache_control": {"type": "ephemeral"}
+        }])
+    } else {
+        serde_json::json!([
+            { "type": "text", "text": request.system_prompt, "cache_control": {"type": "ephemeral"} },
+            { "type": "text", "text": dynamic_system_context }
+        ])
+    };
+
+    let body = serde_json::json!({
+        "model": model.model_name,
+        "max_tokens": request.max_tokens.unwrap_or(4096),
+        "temperature": request.temperature.unwrap_or(0.7),
+        "system": system_blocks,
+        "messages": messages,
+        "stream": true,
+    });
+
+    let resp = client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", api_key.expose())
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&body)
+        .send()
+        .await?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let data: serde_json::Value = resp.json().await?;
+        let err_msg = data["error"]["message"].as_str().unwrap_or("Unknown error");
+        anyhow::bail!("API error ({}): {}", status, err_msg);
+    }
+
+    let mut full_content = String::new();
+    let mut input_tokens = 0u32;
+    let mut output_tokens = 0u32;
+    let mut cache_creation_input_tokens = 0u32;
+    let mut cache_read_input_tokens = 0u32;
+
+    use futures_util::StreamExt;
+    let mut stream = resp.bytes_stream();
+    let mut buffer = String::new();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+        while let Some(line_end) = buffer.find('\n') {
+            let line = buffer[..line_end].trim().to_string();
+            buffer = buffer[line_end + 1..].to_string();
+
+            if !line.starts_with("data: ") { continue; }
+            let json_str = &line[6..];
+            if json_str == "[DONE]" { continue; }
+
+            if let Ok(event) = serde_json::from_str::<serde_json::Value>(json_str) {
+                let event_type = event["type"].as_str().unwrap_or("");
+
+                match event_type {
+                    "content_block_delta" => {
+                        if let Some(text) = event["delta"]["text"].as_str() {
+                            full_content.push_str(text);
+                            let _ = on_token.send(text.to_string()).await;
+                        }
+                    }
+                    "message_delta" => {
+                        if let Some(u) = event["usage"]["output_tokens"].as_u64() {
+                            output_tokens = u as u32;
+                        }
+                    }
+                    "message_start" => {
+                        if let Some(usage) = event.get("message").and_then(|m| m.get("usage")) {
+                            input_tokens = usage["input_tokens"].as_u64().unwrap_or(0) as u32;
+                            cache_creation_input_tokens = usage["cache_creation_input_tokens"]
+                                .as_u64()
+                                .or_else(|| usage["cache_creation"]["ephemeral_5m_input_tokens"].as_u64().map(|v|
+                                    v + usage["cache_creation"]["ephemeral_1h_input_tokens"].as_u64().unwrap_or(0)))
+                                .unwrap_or(0) as u32;
+                            cache_read_input_tokens = usage["cache_read_input_tokens"]
+                                .as_u64()
+                                .or_else(|| usage["cache_read"]["ephemeral_5m_input_tokens"].as_u64().map(|v|
+                                    v + usage["cache_read"]["ephemeral_1h_input_tokens"].as_u64().unwrap_or(0)))
+                                .unwrap_or(0) as u32;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    Ok(ApiResponse {
+        content: full_content,
+        input_tokens,
+        output_tokens,
         cache_creation_input_tokens,
         cache_read_input_tokens,
     })
