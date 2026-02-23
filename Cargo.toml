@@ -11,6 +11,7 @@ members = [
     "crates/memory",
     "crates/cost-ledger",
     "crates/audit-log",
+    "crates/skills",
 ]
 
 [workspace.package]
