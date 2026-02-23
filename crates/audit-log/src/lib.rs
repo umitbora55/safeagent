@@ -2,7 +2,8 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditEntry {
@@ -22,7 +23,7 @@ pub struct AuditEntry {
 }
 
 pub struct AuditLog {
-    db: Mutex<Connection>,
+    pool: Pool<SqliteConnectionManager>,
     max_size_mb: u64,
     retention_days: u32,
 }
@@ -65,8 +66,11 @@ pub fn redact_secrets(input: &str) -> String {
 
 impl AuditLog {
     pub fn new(path: PathBuf, retention_days: u32, max_size_mb: u64) -> Result<Self, AuditError> {
-        let db = Connection::open(&path)
-            .map_err(|e| AuditError::Database(e.to_string()))?;
+        let manager = SqliteConnectionManager::file(&path);
+        let pool = Pool::builder().max_size(10).build(manager)
+            .map_err(|e| AuditError::Database(format!("Pool: {}", e)))?;
+        let db = pool.get().map_err(|e| AuditError::Database(e.to_string()))?;
+        db.execute_batch("PRAGMA journal_mode=WAL;").map_err(|e| AuditError::Database(e.to_string()))?;
 
         db.execute_batch(
             "CREATE TABLE IF NOT EXISTS audit_entries (
@@ -91,11 +95,11 @@ impl AuditLog {
 
         tracing::info!("Audit log initialized at {:?}", path);
 
-        Ok(Self { db: Mutex::new(db), max_size_mb, retention_days })
+        Ok(Self { pool, max_size_mb, retention_days })
     }
 
     pub fn record(&self, entry: &AuditEntry) -> Result<(), AuditError> {
-        let db = self.db.lock().map_err(|e| AuditError::Lock(e.to_string()))?;
+        let db = self.pool.get().map_err(|e| AuditError::Lock(e.to_string()))?;
 
         let error_msg = entry.error_message.as_deref().map(redact_secrets);
         let metadata = redact_secrets(&entry.metadata);
@@ -126,7 +130,7 @@ impl AuditLog {
 
     /// Get recent audit entries, most recent first.
     pub fn recent_entries(&self, limit: u32) -> Result<Vec<AuditEntry>, AuditError> {
-        let db = self.db.lock().map_err(|e| AuditError::Lock(e.to_string()))?;
+        let db = self.pool.get().map_err(|e| AuditError::Lock(e.to_string()))?;
         let mut stmt = db.prepare(
             "SELECT timestamp, event_type, model_name, tier, platform,
                     input_tokens, output_tokens, cost_microdollars, cache_status,
@@ -163,7 +167,7 @@ impl AuditLog {
 
     /// Filter entries by date range.
     pub fn entries_between(&self, from: &str, to: &str, limit: u32) -> Result<Vec<AuditEntry>, AuditError> {
-        let db = self.db.lock().map_err(|e| AuditError::Lock(e.to_string()))?;
+        let db = self.pool.get().map_err(|e| AuditError::Lock(e.to_string()))?;
         let mut stmt = db.prepare(
             "SELECT timestamp, event_type, model_name, tier, platform,
                     input_tokens, output_tokens, cost_microdollars, cache_status,
@@ -201,7 +205,7 @@ impl AuditLog {
 
     /// Prune old entries beyond retention period and size limit.
     pub fn prune(&self) -> Result<u64, AuditError> {
-        let db = self.db.lock().map_err(|e| AuditError::Lock(e.to_string()))?;
+        let db = self.pool.get().map_err(|e| AuditError::Lock(e.to_string()))?;
 
         // Prune by retention days
         let cutoff = Utc::now() - chrono::Duration::days(self.retention_days as i64);
@@ -236,7 +240,7 @@ impl AuditLog {
     }
 
     pub fn entry_count(&self) -> Result<u64, AuditError> {
-        let db = self.db.lock().map_err(|e| AuditError::Lock(e.to_string()))?;
+        let db = self.pool.get().map_err(|e| AuditError::Lock(e.to_string()))?;
         let count: i64 = db.query_row("SELECT COUNT(*) FROM audit_entries", [], |r| r.get(0))
             .map_err(|e| AuditError::Database(e.to_string()))?;
         Ok(count as u64)

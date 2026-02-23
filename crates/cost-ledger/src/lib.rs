@@ -2,7 +2,8 @@ use chrono::{DateTime, Datelike, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CostEntry {
@@ -64,7 +65,7 @@ impl DailyCost {
 }
 
 pub struct CostLedger {
-    db: Mutex<Connection>,
+    pool: Pool<SqliteConnectionManager>,
 }
 
 #[derive(Debug)]
@@ -86,8 +87,11 @@ impl std::error::Error for LedgerError {}
 
 impl CostLedger {
     pub fn new(path: PathBuf) -> Result<Self, LedgerError> {
-        let db = Connection::open(&path)
-            .map_err(|e| LedgerError::Database(e.to_string()))?;
+        let manager = SqliteConnectionManager::file(&path);
+        let pool = Pool::builder().max_size(10).build(manager)
+            .map_err(|e| LedgerError::Database(format!("Pool: {}", e)))?;
+        let db = pool.get().map_err(|e| LedgerError::Database(e.to_string()))?;
+        db.execute_batch("PRAGMA journal_mode=WAL;").map_err(|e| LedgerError::Database(e.to_string()))?;
 
         db.execute_batch(
             "CREATE TABLE IF NOT EXISTS cost_entries (
@@ -110,11 +114,11 @@ impl CostLedger {
 
         tracing::info!("Cost ledger initialized at {:?}", path);
 
-        Ok(Self { db: Mutex::new(db) })
+        Ok(Self { pool })
     }
 
     pub fn record(&self, entry: &CostEntry) -> Result<(), LedgerError> {
-        let db = self.db.lock().map_err(|e| LedgerError::Lock(e.to_string()))?;
+        let db = self.pool.get().map_err(|e| LedgerError::Lock(e.to_string()))?;
         db.execute(
             "INSERT INTO cost_entries (timestamp, model_name, tier, input_tokens, output_tokens,
              cache_read_tokens, cache_write_tokens, cost_microdollars, cache_status, platform, latency_ms)
@@ -159,7 +163,7 @@ impl CostLedger {
     }
 
     fn summary_since(&self, since: &str) -> Result<CostSummary, LedgerError> {
-        let db = self.db.lock().map_err(|e| LedgerError::Lock(e.to_string()))?;
+        let db = self.pool.get().map_err(|e| LedgerError::Lock(e.to_string()))?;
         let mut stmt = db.prepare(
             "SELECT COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0),
                     COALESCE(SUM(cost_microdollars),0), COALESCE(SUM(cache_read_tokens),0),
@@ -182,7 +186,7 @@ impl CostLedger {
     }
 
     pub fn model_breakdown_since(&self, since: &str) -> Result<Vec<ModelCostBreakdown>, LedgerError> {
-        let db = self.db.lock().map_err(|e| LedgerError::Lock(e.to_string()))?;
+        let db = self.pool.get().map_err(|e| LedgerError::Lock(e.to_string()))?;
         let mut stmt = db.prepare(
             "SELECT model_name, COUNT(*), COALESCE(SUM(cost_microdollars),0),
                     COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0)
@@ -211,7 +215,7 @@ impl CostLedger {
         let since = Utc::now() - chrono::Duration::days(days as i64);
         let since_str = since.format("%Y-%m-%dT00:00:00").to_string();
 
-        let db = self.db.lock().map_err(|e| LedgerError::Lock(e.to_string()))?;
+        let db = self.pool.get().map_err(|e| LedgerError::Lock(e.to_string()))?;
         let mut stmt = db.prepare(
             "SELECT DATE(timestamp) as day, COUNT(*), COALESCE(SUM(cost_microdollars),0)
              FROM cost_entries WHERE timestamp >= ?1
@@ -234,7 +238,7 @@ impl CostLedger {
     }
 
     pub fn entry_count(&self) -> Result<u64, LedgerError> {
-        let db = self.db.lock().map_err(|e| LedgerError::Lock(e.to_string()))?;
+        let db = self.pool.get().map_err(|e| LedgerError::Lock(e.to_string()))?;
         let count: i64 = db.query_row(
             "SELECT COUNT(*) FROM cost_entries", [], |row| row.get(0)
         ).map_err(|e| LedgerError::Database(e.to_string()))?;

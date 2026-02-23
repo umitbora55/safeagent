@@ -2,7 +2,8 @@ use chrono::{DateTime, Utc};
 use safeagent_bridge_common::{ChatId, MessageId, Platform, UserId};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 use tracing::info;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -53,16 +54,19 @@ pub struct UserFact {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  Memory Store — thread-safe via Mutex
+//  Memory Store — thread-safe via r2d2 connection pool
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 pub struct MemoryStore {
-    db: Mutex<rusqlite::Connection>,
+    pool: Pool<SqliteConnectionManager>,
 }
 
 impl MemoryStore {
     pub fn new(db_path: PathBuf) -> anyhow::Result<Self> {
-        let conn = rusqlite::Connection::open(&db_path)?;
+        let manager = SqliteConnectionManager::file(&db_path);
+        let pool = Pool::builder().max_size(10).build(manager)
+            .map_err(|e| anyhow::anyhow!("Pool: {}", e))?;
+        let conn = pool.get().map_err(|e| anyhow::anyhow!("Pool: {}", e))?;
 
         conn.execute_batch(
             "PRAGMA journal_mode=WAL;
@@ -95,12 +99,12 @@ impl MemoryStore {
         )?;
 
         info!("🧠 Memory store initialized at {:?}", db_path);
-        Ok(Self { db: Mutex::new(conn) })
+        Ok(Self { pool })
     }
 
     /// Store a message
     pub fn add_message(&self, entry: &MessageEntry) -> anyhow::Result<()> {
-        let db = self.db.lock().unwrap();
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         db.execute(
             "INSERT OR REPLACE INTO messages (id, chat_id, sender_id, role, content, platform, timestamp, token_count)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -128,7 +132,7 @@ impl MemoryStore {
 
     /// Get recent messages for a chat (for LLM context window)
     pub fn recent_messages(&self, chat_id: &ChatId, limit: usize) -> anyhow::Result<Vec<MessageEntry>> {
-        let db = self.db.lock().unwrap();
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         let mut stmt = db.prepare(
             "SELECT id, chat_id, sender_id, role, content, platform, timestamp, token_count
              FROM messages
@@ -172,7 +176,7 @@ impl MemoryStore {
 
     /// Get oldest messages for a chat (stable prefix for caching)
     pub fn oldest_messages(&self, chat_id: &ChatId, limit: usize) -> anyhow::Result<Vec<MessageEntry>> {
-        let db = self.db.lock().unwrap();
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         let mut stmt = db.prepare(
             "SELECT id, chat_id, sender_id, role, content, platform, timestamp, token_count
              FROM messages
@@ -214,7 +218,7 @@ impl MemoryStore {
 
     /// Full-text search across all messages
     pub fn search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<MessageEntry>> {
-        let db = self.db.lock().unwrap();
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         let mut stmt = db.prepare(
             "SELECT m.id, m.chat_id, m.sender_id, m.role, m.content, m.platform, m.timestamp, m.token_count
              FROM messages m
@@ -257,7 +261,7 @@ impl MemoryStore {
 
     /// Store or update a user fact
     pub fn set_fact(&self, fact: &UserFact) -> anyhow::Result<()> {
-        let db = self.db.lock().unwrap();
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         db.execute(
             "INSERT OR REPLACE INTO user_facts (key, value, confidence, source, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -274,7 +278,7 @@ impl MemoryStore {
 
     /// Get all user facts
     pub fn get_facts(&self) -> anyhow::Result<Vec<UserFact>> {
-        let db = self.db.lock().unwrap();
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         let mut stmt = db.prepare(
             "SELECT key, value, confidence, source, updated_at FROM user_facts ORDER BY key"
         )?;
@@ -299,7 +303,7 @@ impl MemoryStore {
 
     /// Get a specific fact
     pub fn get_fact(&self, key: &str) -> anyhow::Result<Option<UserFact>> {
-        let db = self.db.lock().unwrap();
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         let result = db.query_row(
             "SELECT key, value, confidence, source, updated_at FROM user_facts WHERE key = ?1",
             [key],
@@ -325,21 +329,21 @@ impl MemoryStore {
 
     /// Delete a fact
     pub fn delete_fact(&self, key: &str) -> anyhow::Result<bool> {
-        let db = self.db.lock().unwrap();
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         let deleted = db.execute("DELETE FROM user_facts WHERE key = ?1", [key])?;
         Ok(deleted > 0)
     }
 
     /// Total message count
     pub fn message_count(&self) -> anyhow::Result<u64> {
-        let db = self.db.lock().unwrap();
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         let count: u64 = db.query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))?;
         Ok(count)
     }
 
     /// Message count for a specific chat
     pub fn chat_message_count(&self, chat_id: &ChatId) -> anyhow::Result<u64> {
-        let db = self.db.lock().unwrap();
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         let count: u64 = db.query_row(
             "SELECT COUNT(*) FROM messages WHERE chat_id = ?1",
             [&chat_id.0],
@@ -350,7 +354,7 @@ impl MemoryStore {
 
     /// Estimate total tokens for a chat (for context window budgeting)
     pub fn chat_token_estimate(&self, chat_id: &ChatId) -> anyhow::Result<u64> {
-        let db = self.db.lock().unwrap();
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         let total: u64 = db.query_row(
             "SELECT COALESCE(SUM(token_count), 0) FROM messages WHERE chat_id = ?1",
             [&chat_id.0],
@@ -367,7 +371,7 @@ impl MemoryStore {
 
     /// Get message count for a specific chat.
     pub fn message_count_for_chat(&self, chat_id: &ChatId) -> anyhow::Result<usize> {
-        let db = self.db.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         let count: i64 = db.query_row(
             "SELECT COUNT(*) FROM messages WHERE chat_id = ?1",
             rusqlite::params![chat_id.0],
@@ -399,7 +403,7 @@ impl MemoryStore {
             token_count: None,
         };
         self.add_message(&summary_entry)?;
-        let db = self.db.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let db = self.pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
         for id in pruned_ids {
             db.execute("DELETE FROM messages WHERE id = ?1", rusqlite::params![id])?;
         }
