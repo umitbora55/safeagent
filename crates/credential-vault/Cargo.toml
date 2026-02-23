@@ -1,0 +1,21 @@
+[package]
+name = "safeagent-credential-vault"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+rusqlite = { version = "0.31", features = ["bundled"] }
+zeroize = { version = "1", features = ["derive"] }
+async-trait.workspace = true
+uuid = { version = "1", features = ["v4"] }
+
+safeagent-llm-router = { path = "../llm-router" }

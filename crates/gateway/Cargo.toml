@@ -1,0 +1,28 @@
+[package]
+name = "safeagent-gateway"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "safeagent"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+directories = "5"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+safeagent-bridge-common = { path = "../bridges/common" }
+safeagent-policy-engine = { path = "../policy-engine" }
+safeagent-prompt-guard = { path = "../prompt-guard" }
+safeagent-llm-router = { path = "../llm-router" }
+safeagent-credential-vault = { path = "../credential-vault" }
+safeagent-memory = { path = "../memory" }
+safeagent-bridge-telegram = { path = "../bridges/telegram" }

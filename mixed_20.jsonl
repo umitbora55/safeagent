@@ -1,0 +1,20 @@
+{"prompt": "Selam", "expected_tier": "economy", "category": "greeting"}
+{"prompt": "Merhaba, nasılsın?", "expected_tier": "economy", "category": "greeting"}
+{"prompt": "Thanks!", "expected_tier": "economy", "category": "greeting"}
+{"prompt": "What is the capital of France?", "expected_tier": "economy", "category": "simple_qa"}
+{"prompt": "Türkiye'nin nüfusu kaç?", "expected_tier": "economy", "category": "simple_qa"}
+{"prompt": "What does HTTP 429 mean?", "expected_tier": "economy", "category": "simple_qa"}
+{"prompt": "Convert 72 Fahrenheit to Celsius", "expected_tier": "economy", "category": "simple_qa"}
+{"prompt": "Who wrote Crime and Punishment?", "expected_tier": "economy", "category": "simple_qa"}
+{"prompt": "Summarize the main differences between REST and GraphQL", "expected_tier": "standard", "category": "summarization"}
+{"prompt": "Write a Python function that takes a list of integers and returns the second largest unique value", "expected_tier": "standard", "category": "code"}
+{"prompt": "Explain how TLS 1.3 handshake works step by step", "expected_tier": "standard", "category": "explanation"}
+{"prompt": "Write a Rust function to parse a TOML config file and return a typed struct with error handling", "expected_tier": "standard", "category": "code"}
+{"prompt": "Şu SQL sorgusunu optimize et ve index önerisi ver:\nSELECT u.name, COUNT(o.id) FROM users u JOIN orders o ON u.id = o.user_id WHERE o.created_at > '2024-01-01' GROUP BY u.name HAVING COUNT(o.id) > 5 ORDER BY COUNT(o.id) DESC", "expected_tier": "standard", "category": "code"}
+{"prompt": "Compare event-driven architecture vs request-response for a real-time chat system. Include trade-offs for latency, scalability, and operational complexity.", "expected_tier": "standard", "category": "analysis"}
+{"prompt": "Draft a technical blog post outline about building a cost-optimized LLM router, covering embedding-based routing, prompt caching, and cache affinity", "expected_tier": "standard", "category": "content_creation"}
+{"prompt": "Analyze the architectural tradeoffs between microservices and monolith for a fintech startup handling 10K TPS. Consider data consistency, deployment complexity, team structure, and regulatory compliance. Provide a concrete recommendation with migration path.", "expected_tier": "premium", "category": "architecture"}
+{"prompt": "Prove that the halting problem is undecidable using a diagonalization argument. Then explain why this result has practical implications for static analysis tools.", "expected_tier": "premium", "category": "deep_reasoning"}
+{"prompt": "Design a capability-based permission system for an AI agent that can read files, send emails, and browse the web. Define the threat model, trust boundaries, permission inheritance rules, and revocation mechanism. Include concrete TOML config examples.", "expected_tier": "premium", "category": "architecture"}
+{"prompt": "Evaluate whether transformer attention is Turing-complete. Present the formal argument, identify the key assumptions, and discuss what this means for the practical expressiveness of LLMs vs recurrent architectures.", "expected_tier": "premium", "category": "deep_reasoning"}
+{"prompt": "I'm building a Rust-based AI agent framework. Review this credential vault design and identify potential security weaknesses:\n- AES-256-GCM encryption\n- Argon2id key derivation from user password\n- SQLite storage with nonce per entry\n- Zeroize on drop for sensitive strings\nConsider: side-channel attacks, key management lifecycle, backup/recovery, and multi-user scenarios.", "expected_tier": "premium", "category": "security_review"}
