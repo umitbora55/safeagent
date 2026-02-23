@@ -1,0 +1,15 @@
+[package]
+name = "safeagent-policy-engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+tracing.workspace = true
+tokio.workspace = true
+dashmap = "6"
+
+safeagent-bridge-common = { path = "../bridges/common" }

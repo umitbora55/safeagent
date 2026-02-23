@@ -1,0 +1,1 @@
+/Users/umitboragunaydin/Desktop/Eski\ Masaüstü/SafeAgent/target/debug/libsafeagent_memory.rlib: /Users/umitboragunaydin/Desktop/Eski\ Masaüstü/SafeAgent/crates/bridges/common/src/lib.rs /Users/umitboragunaydin/Desktop/Eski\ Masaüstü/SafeAgent/crates/memory/src/lib.rs
