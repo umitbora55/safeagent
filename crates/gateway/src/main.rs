@@ -9,6 +9,7 @@ mod cmd_export;
 mod pricing;
 mod circuit_breaker;
 mod shutdown;
+mod encryption;
 
 use anyhow::Result;
 use safeagent_bridge_common::*;
