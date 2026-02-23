@@ -4,6 +4,7 @@ mod cmd_stats;
 mod config;
 use config::SafeAgentConfig;
 mod cmd_audit;
+mod cmd_export_logs;
 
 use anyhow::Result;
 use safeagent_bridge_common::*;
@@ -47,6 +48,8 @@ enum Commands {
     Stats,
     /// Browse audit log
     Audit,
+    /// Export anonymized logs for metrics
+    ExportLogs,
     /// Start the assistant (default if no command given)
     Run,
 }
@@ -68,6 +71,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Audit) => {
             cmd_audit::run_audit(&data_dir)
+        }
+        Some(Commands::ExportLogs) => {
+            cmd_export_logs::run_export_logs(&data_dir)
         }
         Some(Commands::Run) | None => {
             run_agent(data_dir).await
