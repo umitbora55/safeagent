@@ -1,0 +1,18 @@
+# SafeAgent — Economy Configuration
+# Optimized for lowest cost. Uses Haiku for most requests.
+# Best for: chatbots, simple Q&A, high-volume low-complexity tasks.
+
+[router]
+mode = "economy"
+confidence_preset = "aggressive"
+
+[cache]
+enabled = true
+
+[policy]
+daily_limit_usd = 5.0
+monthly_limit_usd = 30.0
+
+[logging]
+level = "info"
+theme = "dark"
