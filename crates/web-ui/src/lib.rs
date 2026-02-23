@@ -1,7 +1,9 @@
+pub mod mcp;
+
 use axum::{
     extract::State,
     response::{Html, IntoResponse, Json},
-    routing::get,
+    routing::{get, post},
     Router,
 };
 use safeagent_audit_log::AuditLog;
@@ -16,6 +18,7 @@ pub struct AppState {
     pub audit: Option<AuditLog>,
     pub memory: Option<MemoryStore>,
     pub version: String,
+    pub webhook_tx: Option<tokio::sync::mpsc::Sender<WebhookMessage>>,
     pub config_path: Option<std::path::PathBuf>,
     pub start_time: chrono::DateTime<chrono::Utc>,
 }
@@ -28,6 +31,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/audit", get(api_audit))
         .route("/api/conversations", get(api_conversations))
         .route("/api/settings", get(api_settings))
+        .route("/api/webhook/message", post(api_webhook_message))
+        .route("/api/webhook/health", post(api_webhook_health))
+        .route("/mcp", post(mcp::mcp_handle))
+        .route("/mcp/tools", get(mcp::mcp_list_tools))
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
@@ -159,6 +166,78 @@ async fn api_settings(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     Json(serde_json::json!({
         "config_path": state.config_path.as_ref().map(|p| p.display().to_string()),
         "config_content": config_content,
+    }))
+}
+
+/// Message received via webhook API.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct WebhookMessage {
+    /// The message text to process
+    pub message: String,
+    /// Optional user identifier
+    #[serde(default = "default_webhook_user")]
+    pub user_id: String,
+    /// Optional callback URL for async response
+    pub callback_url: Option<String>,
+    /// Optional API key for authentication
+    pub api_key: Option<String>,
+}
+
+fn default_webhook_user() -> String { "webhook_user".into() }
+
+#[derive(Debug, serde::Serialize)]
+struct WebhookResponse {
+    status: String,
+    message_id: String,
+    queued: bool,
+}
+
+async fn api_webhook_message(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<WebhookMessage>,
+) -> impl IntoResponse {
+    if payload.message.trim().is_empty() {
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Empty message"})),
+        );
+    }
+
+    let msg_id = uuid::Uuid::new_v4().to_string();
+
+    match &state.webhook_tx {
+        Some(tx) => {
+            match tx.send(payload).await {
+                Ok(_) => (
+                    axum::http::StatusCode::ACCEPTED,
+                    Json(serde_json::json!({
+                        "status": "queued",
+                        "message_id": msg_id,
+                        "queued": true,
+                    })),
+                ),
+                Err(_) => (
+                    axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({"error": "Message queue full"})),
+                ),
+            }
+        }
+        None => (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"error": "Webhook processing not enabled"})),
+        ),
+    }
+}
+
+async fn api_webhook_health(
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let uptime = chrono::Utc::now() - state.start_time;
+    Json(serde_json::json!({
+        "status": "ok",
+        "version": state.version,
+        "uptime_seconds": uptime.num_seconds(),
+        "webhook_enabled": state.webhook_tx.is_some(),
     }))
 }
 

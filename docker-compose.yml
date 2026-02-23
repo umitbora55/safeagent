@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  safeagent:
+    build: .
+    container_name: safeagent
+    restart: unless-stopped
+    ports:
+      - "18789:18789"     # Web UI
+    volumes:
+      - safeagent-data:/home/safeagent/.local/share/safeagent
+    environment:
+      - RUST_LOG=info
+      # Pass secrets via env vars or mount a config
+      # - ANTHROPIC_API_KEY=sk-ant-...
+      # - TELEGRAM_BOT_TOKEN=123456:ABC...
+      # - VAULT_PASSWORD=...
+    # Alternative: mount config file
+    # volumes:
+    #   - ./safeagent.toml:/home/safeagent/.local/share/safeagent/safeagent.toml:ro
+
+volumes:
+  safeagent-data:
+    driver: local
