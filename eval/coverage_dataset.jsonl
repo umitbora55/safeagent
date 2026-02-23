@@ -1,0 +1,140 @@
+{"prompt": "merhaba", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "selam", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "hi", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "hello", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "hey", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "teşekkürler", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "ok", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "tamam", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "anladım", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "günaydın", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "iyi akşamlar", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "nasılsın", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "ne haber", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "bye", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "görüşürüz", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "türkiye'nin başkenti neresi", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what is 2+2", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "5 * 7 nedir", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "kaç gün var bir yılda", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "python nedir", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "javascript nedir", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "HTML ne demek", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "HTTP ne demek", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "bugün günlerden ne", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "saat kaç", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "hava nasıl", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "python'da print nasıl kullanılır", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "javascript'te console.log yaz", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "write hello world in python", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "write hello world in java", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "write hello world in go", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "python'da liste nasıl oluşturulur", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "javascript'te array yaz", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "for loop in python", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "while loop in javascript", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "if else in rust", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "reverse a string in python", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "sort a list in python", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "find max in array", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what is an API", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what is JSON", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what is REST", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what is HTML", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "convert celsius to fahrenheit formula", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what is pi", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "square root of 144", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "translate hello to turkish", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "translate merhaba to english", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "who invented the telephone", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "when was python created", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what is linux", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what color is the sky", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "how many continents are there", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what is the largest ocean", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "capital of japan", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "capital of germany", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "capital of france", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what day is christmas", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "how many hours in a day", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "how many minutes in an hour", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "spell the word 'necessary'", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what does 'ephemeral' mean", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what is the chemical symbol for water", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "what is DNA", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "how to make a sandwich", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "recipe for scrambled eggs", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "thank you for your help", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "that makes sense", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "got it", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "perfect", "expected_tier": "economy", "task_type": "simple"}
+{"prompt": "explain the difference between TCP and UDP in detail", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write a REST API in python with flask including error handling", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "microservices vs monolith architecture comparison", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "react ile bir todo app yaz state management ile", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "kubernetes'te pod scheduling nasıl çalışır", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write unit tests for a python class with mocking", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "explain how OAuth 2.0 authorization code flow works", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "design a database schema for an e-commerce platform", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write a python script that reads CSV and generates a report", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "explain the differences between SQL and NoSQL databases", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "implement a binary search tree in python with insert and search", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write a dockerfile for a node.js application with multi-stage build", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "explain how git branching strategies work (gitflow vs trunk-based)", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write a github actions CI pipeline for a rust project", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "implement rate limiting middleware in express.js", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "explain how DNS resolution works step by step", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write a python decorator that caches function results", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "compare React, Vue, and Angular for a new project", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "implement a simple pub/sub system in python", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "explain how HTTPS/TLS handshake works", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write a bash script that backs up a postgresql database", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "implement pagination for a REST API in python", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "explain the SOLID principles with examples", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write a simple web scraper in python using beautifulsoup", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "design a URL shortener service architecture", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "implement a simple state machine in typescript", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "explain how docker networking works", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write integration tests for a REST API", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "implement a simple CLI tool in rust with clap", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "explain event-driven architecture with examples", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write a python script to analyze log files and find errors", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "implement a simple chat server with websockets", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "explain how load balancing algorithms work", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "design an authentication system with JWT tokens", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write a migration script for a database schema change", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "explain the CAP theorem in simple terms", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "implement connection pooling in a database client", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "write a terraform config for AWS EC2 instance", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "explain how message queues work (RabbitMQ vs Kafka)", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "implement a simple search engine with inverted index", "expected_tier": "standard", "task_type": "moderate"}
+{"prompt": "design a distributed caching system that handles cache invalidation across multiple data centers", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "analyze the trade-offs between eventual consistency and strong consistency in distributed databases with real-world examples", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "write a complete compiler frontend for a simple programming language including lexer parser and AST", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "explain the mathematical proof behind the CAP theorem and its practical implications", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design a secure multi-tenant SaaS architecture with data isolation rate limiting and audit logging", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "implement a lock-free concurrent data structure in rust with formal correctness arguments", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design a real-time recommendation engine that handles millions of users with low latency", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "write a distributed consensus algorithm implementation similar to raft", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "analyze the security implications of running LLM agents with tool access and propose mitigations", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design a database migration system that supports zero-downtime schema changes at scale", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "implement a custom memory allocator in rust optimized for a specific workload pattern", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design an end-to-end encrypted messaging system with forward secrecy and group chat support", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "write a query optimizer for a simple SQL-like language", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design a CI/CD pipeline that supports canary deployments with automatic rollback", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "implement a distributed tracing system similar to jaeger or zipkin", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "analyze the performance characteristics of different garbage collection algorithms", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design a multi-region active-active database replication system", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "implement a bytecode interpreter for a custom scripting language", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design a financial trading system with microsecond latency requirements", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "write a formal verification proof for a concurrent data structure", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design an auto-scaling system that predicts traffic patterns using ML", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "implement a custom B-tree with MVCC support for a database engine", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design a secure API gateway with rate limiting, auth, and request transformation", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "analyze the trade-offs between different approaches to distributed transactions (2PC, Saga, CRDT)", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "implement a streaming data pipeline that handles exactly-once semantics", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design a content delivery network architecture from scratch", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "write a custom neural network training framework with automatic differentiation", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design a chaos engineering platform for testing distributed system resilience", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "implement a database connection pooler with read-write splitting and failover", "expected_tier": "premium", "task_type": "complex"}
+{"prompt": "design a real-time collaborative editing system like google docs with conflict resolution", "expected_tier": "premium", "task_type": "complex"}
