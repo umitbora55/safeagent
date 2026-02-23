@@ -27,3 +27,4 @@ safeagent-llm-router = { path = "../llm-router" }
 safeagent-credential-vault = { path = "../credential-vault" }
 safeagent-memory = { path = "../memory" }
 safeagent-bridge-telegram = { path = "../bridges/telegram" }
+safeagent-cost-ledger = { path = "../cost-ledger" }

@@ -9,6 +9,7 @@ members = [
     "crates/llm-router",
     "crates/credential-vault",
     "crates/memory",
+    "crates/cost-ledger",
 ]
 
 [workspace.package]

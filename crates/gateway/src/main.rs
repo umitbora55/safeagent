@@ -1,8 +1,10 @@
 mod cmd_init;
 mod cmd_doctor;
+mod cmd_stats;
 
 use anyhow::Result;
 use safeagent_bridge_common::*;
+use safeagent_cost_ledger::{CostEntry, CostLedger};
 use safeagent_credential_vault::{CredentialVault, SensitiveString};
 use safeagent_llm_router::{
     embedding_to_scores, extract_features, load_centroids, LlmMessage, LlmRequest, LlmRouter, ModelConfig,
@@ -37,6 +39,8 @@ enum Commands {
     Init,
     /// Diagnose common setup issues
     Doctor,
+    /// Show cost report (daily/weekly/monthly)
+    Stats,
     /// Start the assistant (default if no command given)
     Run,
 }
@@ -53,15 +57,14 @@ async fn main() -> Result<()> {
         Some(Commands::Doctor) => {
             cmd_doctor::run_doctor(&data_dir).await
         }
+        Some(Commands::Stats) => {
+            cmd_stats::run_stats(&data_dir)
+        }
         Some(Commands::Run) | None => {
             run_agent(data_dir).await
         }
     }
 }
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  Main agent loop (previously the entire main fn)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 async fn run_agent(data_dir: PathBuf) -> Result<()> {
     tracing_subscriber::fmt()
@@ -81,19 +84,19 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
     std::fs::create_dir_all(&data_dir)?;
     tracing::info!("Data dir: {:?}", data_dir);
 
-    // Init core systems
     let memory = Arc::new(MemoryStore::new(data_dir.join("memory.db"))?);
     let policy = Arc::new(PolicyEngine::new(PolicyConfig::default()));
     let guard = Arc::new(PromptGuard::with_defaults());
     let vault = Arc::new(CredentialVault::new(data_dir.join("vault.db"))?);
+    let ledger = Arc::new(CostLedger::new(data_dir.join("cost_ledger.db"))
+        .map_err(|e| anyhow::anyhow!("{}", e))?);
+    let session_cost = Arc::new(std::sync::atomic::AtomicU64::new(0));
 
     let vault_password = prompt_password()?;
     vault.unlock(&vault_password)?;
 
-    // Get API key
     let api_key = get_or_prompt_key(&vault, "anthropic_key", "Anthropic API Key", "anthropic", "sk-ant-...")?;
 
-    // Setup models
     let available_models = default_models();
     let router = Arc::new(LlmRouter::new(available_models.clone(), RoutingMode::Balanced));
     let centroids = load_centroids().expect("Failed to load centroids");
@@ -102,7 +105,6 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
         Mutex::new(HashMap::new())
     );
 
-    // Check for Telegram token
     let telegram_token = match vault.get("telegram_token") {
         Ok(t) => Some(t),
         Err(_) => {
@@ -111,7 +113,6 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
         }
     };
 
-    // Check for Telegram chat ID
     let telegram_chat_id = match vault.get("telegram_chat_id") {
         Ok(id) => Some(id),
         Err(_) => None,
@@ -120,10 +121,8 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
     println!("  ✅ All systems ready");
     println!();
 
-    // Central message channel — all bridges feed into this
     let (central_tx, mut central_rx) = mpsc::channel::<IncomingMessage>(256);
 
-    // Start Telegram bridge if configured
     let mut telegram_outbox_tx: Option<mpsc::Sender<OutgoingMessage>> = None;
 
     if let (Some(token), Some(chat_id)) = (&telegram_token, &telegram_chat_id) {
@@ -145,7 +144,6 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
         println!("  📱 Telegram bridge active");
     }
 
-    // Start CLI input bridge (sends to central channel)
     let cli_tx = central_tx.clone();
     tokio::spawn(async move {
         cli_input_loop(cli_tx).await;
@@ -154,19 +152,16 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
     println!("  💬 CLI active — type a message (or /help, /quit)");
     println!();
 
-    // Central processing loop
     let http_client = reqwest::Client::new();
     let mut cache_affinity: HashMap<String, ChatCacheAffinity> = HashMap::new();
 
     while let Some(incoming) = central_rx.recv().await {
         let text = incoming.content.as_text();
 
-        // Skip empty
         if text.trim().is_empty() {
             continue;
         }
 
-        // Handle commands (CLI only)
         if incoming.platform == Platform::Cli {
             match text.as_str() {
                 "/quit" | "/exit" | "/q" => {
@@ -174,7 +169,7 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
                     break;
                 }
                 "/help" => { print_help(); continue; }
-                "/stats" => { print_stats(&router, &policy, &memory); continue; }
+                "/stats" => { let _ = cmd_stats::run_stats(&get_data_dir()); continue; }
                 "/mode economy" => { router.set_mode(RoutingMode::Economy); println!("  🔄 Economy mode"); continue; }
                 "/mode balanced" => { router.set_mode(RoutingMode::Balanced); println!("  🔄 Balanced mode"); continue; }
                 "/mode performance" => { router.set_mode(RoutingMode::Performance); println!("  🔄 Performance mode"); continue; }
@@ -183,7 +178,6 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
             }
         }
 
-        // 1. Sanitize
         let source = if incoming.platform == Platform::Cli {
             ContentSource::User
         } else {
@@ -196,7 +190,6 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
             continue;
         }
 
-        // 2. Store user message
         let user_entry = MessageEntry {
             id: MessageId(uuid::Uuid::new_v4().to_string()),
             chat_id: incoming.chat_id.clone(),
@@ -209,7 +202,6 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
         };
         let _ = memory.add_message(&user_entry);
 
-        // 3. Build LLM request
         let oldest = memory.oldest_messages(&incoming.chat_id, 12).unwrap_or_default();
         let recent = memory.recent_messages(&incoming.chat_id, 8).unwrap_or_default();
         let mut seen_ids = HashSet::new();
@@ -234,7 +226,6 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
             content: m.content.clone(),
         }).collect();
 
-        // 3. Embedding-based routing
         let embedding_scores = if let Ok(voyage_key) = vault.get("voyage_api_key") {
             let user_message = text.clone();
             let cached = {
@@ -274,17 +265,12 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
         if let Some(ref emb) = routing_request.embedding_scores {
             println!(
                 "  │  🧠 Embedding: eco={:.4} std={:.4} pre={:.4} conf={:.4} winner={:?} │",
-                emb.economy,
-                emb.standard,
-                emb.premium,
-                emb.confidence(),
-                emb.winner()
+                emb.economy, emb.standard, emb.premium, emb.confidence(), emb.winner()
             );
         } else {
             println!("  │  🧠 Embedding: unavailable │");
         }
 
-        // 4. Route & call
         let routed_model = match router.select_model(&routing_request) {
             Some(m) => m,
             None => {
@@ -309,11 +295,7 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
 
         let start = std::time::Instant::now();
         match call_anthropic(
-            &http_client,
-            &model,
-            &api_key,
-            &request,
-            &dynamic_system_context,
+            &http_client, &model, &api_key, &request, &dynamic_system_context,
         ).await {
             Ok(response) => {
                 let latency = start.elapsed().as_millis() as u64;
@@ -330,9 +312,7 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
                     (true, true) => "hit+write",
                     (true, false) => "hit",
                     (false, true) => "write",
-                    (false, false) if below_threshold => {
-                        "below_threshold"
-                    }
+                    (false, false) if below_threshold => "below_threshold",
                     (false, false) => "miss",
                 };
                 print_runtime_diagnostics(RuntimeDiagnostics {
@@ -349,6 +329,30 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
                 });
                 router.record_model_success(&model.id, latency);
                 policy.record_spend(cost);
+
+                let tier_str = match model.tier {
+                    ModelTier::Economy => "economy",
+                    ModelTier::Standard => "standard",
+                    ModelTier::Premium => "premium",
+                };
+                let _ = ledger.record(&CostEntry {
+                    timestamp: chrono::Utc::now(),
+                    model_name: model.model_name.clone(),
+                    tier: tier_str.to_string(),
+                    input_tokens: response.input_tokens,
+                    output_tokens: response.output_tokens,
+                    cache_read_tokens: response.cache_read_input_tokens,
+                    cache_write_tokens: response.cache_creation_input_tokens,
+                    cost_microdollars: cost,
+                    cache_status: cache_status.to_string(),
+                    platform: format!("{:?}", incoming.platform).to_lowercase(),
+                    latency_ms: latency,
+                });
+
+                session_cost.fetch_add(cost, std::sync::atomic::Ordering::Relaxed);
+                let session_usd = session_cost.load(std::sync::atomic::Ordering::Relaxed) as f64 / 1_000_000.0;
+                let today_usd = ledger.today_summary().map(|s| s.cost_usd()).unwrap_or(0.0);
+
                 update_cache_affinity(
                     &mut cache_affinity,
                     &incoming.chat_id,
@@ -358,18 +362,17 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
                     response.cache_read_input_tokens,
                 );
 
-                // Show in CLI
                 if incoming.platform == Platform::Cli {
                     println!("  🤖 [{}] {}", model.model_name, response.content);
                     println!(
-                        "  └─ {}in/{}out | ${:.4} | {}ms",
+                        "  └─ {}in/{}out | ${:.4} | {}ms | session ${:.4} | today ${:.4}",
                         response.input_tokens, response.output_tokens,
-                        cost as f64 / 1_000_000.0, latency
+                        cost as f64 / 1_000_000.0, latency,
+                        session_usd, today_usd
                     );
                     println!();
                 }
 
-                // Send to Telegram if message came from there
                 if incoming.platform == Platform::Telegram {
                     let clean_content = response.content
                         .lines()
@@ -396,7 +399,6 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
                     send_response(&incoming, &tg_text, &telegram_outbox_tx).await;
                 }
 
-                // Store assistant response
                 let assistant_entry = MessageEntry {
                     id: MessageId(uuid::Uuid::new_v4().to_string()),
                     chat_id: incoming.chat_id.clone(),
@@ -424,10 +426,6 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
     Ok(())
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  All helper functions below — unchanged from original
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 async fn cli_input_loop(tx: mpsc::Sender<IncomingMessage>) {
     let stdin = io::stdin();
     loop {
@@ -435,16 +433,10 @@ async fn cli_input_loop(tx: mpsc::Sender<IncomingMessage>) {
         let _ = io::stdout().flush();
 
         let mut input = String::new();
-        let Ok(bytes_read) = stdin.lock().read_line(&mut input) else {
-            break;
-        };
-        if bytes_read == 0 {
-            break;
-        }
+        let Ok(bytes_read) = stdin.lock().read_line(&mut input) else { break; };
+        if bytes_read == 0 { break; }
         let input = input.trim().to_string();
-        if input.is_empty() {
-            continue;
-        }
+        if input.is_empty() { continue; }
 
         let msg = IncomingMessage {
             id: MessageId(uuid::Uuid::new_v4().to_string()),
@@ -458,9 +450,7 @@ async fn cli_input_loop(tx: mpsc::Sender<IncomingMessage>) {
             metadata: serde_json::Value::Null,
         };
 
-        if tx.send(msg).await.is_err() {
-            break;
-        }
+        if tx.send(msg).await.is_err() { break; }
     }
 }
 
@@ -527,17 +517,11 @@ fn print_runtime_diagnostics(d: RuntimeDiagnostics<'_>) {
         _ => ("UNKNOWN", d.reason),
     };
 
-    let read_ratio_raw = if d.estimated_input_tokens == 0 {
-        0
-    } else {
-        ((d.cache_read_tokens as f64 / d.estimated_input_tokens as f64) * 100.0).round() as u32
-    };
+    let read_ratio_raw = if d.estimated_input_tokens == 0 { 0 }
+    else { ((d.cache_read_tokens as f64 / d.estimated_input_tokens as f64) * 100.0).round() as u32 };
 
-    let write_ratio_raw = if d.estimated_input_tokens == 0 {
-        0
-    } else {
-        ((d.cache_write_tokens as f64 / d.estimated_input_tokens as f64) * 100.0).round() as u32
-    };
+    let write_ratio_raw = if d.estimated_input_tokens == 0 { 0 }
+    else { ((d.cache_write_tokens as f64 / d.estimated_input_tokens as f64) * 100.0).round() as u32 };
 
     let read_ratio = read_ratio_raw.min(100);
     let write_ratio = write_ratio_raw.min(100);
@@ -559,91 +543,34 @@ fn print_runtime_diagnostics(d: RuntimeDiagnostics<'_>) {
     let cache_eligible = d.total_input_tokens >= d.min_cache_tokens;
     let eligibility_text = if cache_eligible { "PASS" } else { "FAIL" };
     let eligibility_gap = d.total_input_tokens as i64 - d.min_cache_tokens as i64;
-    let eligibility_color = if cache_eligible {
-        theme.positive
-    } else {
-        theme.warning
-    };
+    let eligibility_color = if cache_eligible { theme.positive } else { theme.warning };
 
     let title = fit_display("SAFEAGENT EXECUTIVE CACHE DASHBOARD", row_width);
     let subtitle = fit_display("LIVE MODEL ROUTING + CACHE OPERATIONS", row_width);
     let model_row = fit_display(&format!("MODEL PIPELINE      {}", model_route), row_width);
     let status_row = fit_display(
-        &format!("STATUS              {} {}  {}", status_badge, status_icon, status_note),
-        row_width,
-    );
+        &format!("STATUS              {} {}  {}", status_badge, status_icon, status_note), row_width);
     let divider_row = fit_display(&"─".repeat(row_width), row_width);
     let routing_code_row = fit_display(
-        &format!(
-            "ROUTING CODE        {:<18} detail: {}",
-            reason_code,
-            trim_display(reason_text, 48)
-        ),
-        row_width,
-    );
+        &format!("ROUTING CODE        {:<18} detail: {}", reason_code, trim_display(reason_text, 48)), row_width);
     let cache_read_row = fit_display(
-        &format!(
-            "CACHE READ          {:>6} tok ({:>3}%) {}",
-            d.cache_read_tokens,
-            read_ratio_raw.min(999),
-            read_bar
-        ),
-        row_width,
-    );
+        &format!("CACHE READ          {:>6} tok ({:>3}%) {}", d.cache_read_tokens, read_ratio_raw.min(999), read_bar), row_width);
     let cache_write_row = fit_display(
-        &format!(
-            "CACHE WRITE         {:>6} tok ({:>3}%) {}",
-            d.cache_write_tokens,
-            write_ratio_raw.min(999),
-            write_bar
-        ),
-        row_width,
-    );
+        &format!("CACHE WRITE         {:>6} tok ({:>3}%) {}", d.cache_write_tokens, write_ratio_raw.min(999), write_bar), row_width);
     let efficiency_row = fit_display(
-        &format!(
-            "CACHE EFFICIENCY    {:>3}% {}",
-            total_read_efficiency.round() as u32,
-            total_bar
-        ),
-        row_width,
-    );
+        &format!("CACHE EFFICIENCY    {:>3}% {}", total_read_efficiency.round() as u32, total_bar), row_width);
     let eligibility_row = fit_display(
-        &format!(
-            "CACHE ELIGIBILITY   [{:<4}]  total_in {:>6} | min {:>6} | delta {:+}",
-            eligibility_text,
-            d.total_input_tokens,
-            d.min_cache_tokens,
-            eligibility_gap
-        ),
-        row_width,
-    );
+        &format!("CACHE ELIGIBILITY   [{:<4}]  total_in {:>6} | min {:>6} | delta {:+}",
+            eligibility_text, d.total_input_tokens, d.min_cache_tokens, eligibility_gap), row_width);
     let tokens_row = fit_display(
-        &format!(
-            "TOKEN SNAPSHOT      actual {:>6} | est {:>6} | expected_cache_read {:>6}",
-            d.total_input_tokens,
-            d.estimated_input_tokens,
-            d.expected_cache_read_tokens
-        ),
-        row_width,
-    );
+        &format!("TOKEN SNAPSHOT      actual {:>6} | est {:>6} | expected_cache_read {:>6}",
+            d.total_input_tokens, d.estimated_input_tokens, d.expected_cache_read_tokens), row_width);
 
     let print_row = |color: &'static str, row: &str| {
-        println!(
-            "  {}│ {}{}{} │{}",
-            c(theme.border),
-            c(color),
-            row,
-            c(theme.reset),
-            c(theme.reset),
-        );
+        println!("  {}│ {}{}{} │{}", c(theme.border), c(color), row, c(theme.reset), c(theme.reset));
     };
 
-    println!(
-        "  {}╭{}╮{}",
-        c(theme.border),
-        border_line,
-        c(theme.reset),
-    );
+    println!("  {}╭{}╮{}", c(theme.border), border_line, c(theme.reset));
     print_row(theme.title, &title);
     print_row(theme.muted, &subtitle);
     print_row(theme.muted, &divider_row);
@@ -655,12 +582,7 @@ fn print_runtime_diagnostics(d: RuntimeDiagnostics<'_>) {
     print_row(theme.highlight, &efficiency_row);
     print_row(eligibility_color, &eligibility_row);
     print_row(theme.value, &tokens_row);
-    println!(
-        "  {}╰{}╯{}",
-        c(theme.border),
-        border_line,
-        c(theme.reset),
-    );
+    println!("  {}╰{}╯{}", c(theme.border), border_line, c(theme.reset));
 }
 
 fn render_bar(value_percent: u32, width: usize, fill: &str, empty: &str) -> String {
@@ -668,21 +590,13 @@ fn render_bar(value_percent: u32, width: usize, fill: &str, empty: &str) -> Stri
     let max_percent = value_percent.min(100);
     let fill_count = ((max_percent as usize * width) / 100).min(width);
     let empty_count = width.saturating_sub(fill_count);
-    format!(
-        "[{}{}]",
-        fill.repeat(fill_count),
-        empty.repeat(empty_count)
-    )
+    format!("[{}{}]", fill.repeat(fill_count), empty.repeat(empty_count))
 }
 
 fn trim_display(text: &str, max_chars: usize) -> String {
     let count = text.chars().count();
-    if count <= max_chars {
-        return text.to_string();
-    }
-    if max_chars <= 1 {
-        return "…".to_string();
-    }
+    if count <= max_chars { return text.to_string(); }
+    if max_chars <= 1 { return "…".to_string(); }
     let keep = max_chars - 1;
     let mut out = text.chars().take(keep).collect::<String>();
     out.push('…');
@@ -692,61 +606,37 @@ fn trim_display(text: &str, max_chars: usize) -> String {
 fn fit_display(text: &str, width: usize) -> String {
     let trimmed = trim_display(text, width);
     let len = trimmed.chars().count();
-    if len >= width {
-        trimmed
-    } else {
-        format!("{}{}", trimmed, " ".repeat(width - len))
-    }
+    if len >= width { trimmed } else { format!("{}{}", trimmed, " ".repeat(width - len)) }
 }
 
 struct DiagnosticsTheme<'a> {
-    border: &'a str,
-    title: &'a str,
-    muted: &'a str,
-    value: &'a str,
-    positive: &'a str,
-    warning: &'a str,
-    highlight: &'a str,
-    reset: &'a str,
+    border: &'a str, title: &'a str, muted: &'a str, value: &'a str,
+    positive: &'a str, warning: &'a str, highlight: &'a str, reset: &'a str,
 }
 
 fn diagnostics_theme() -> DiagnosticsTheme<'static> {
     let dark = !matches!(
-        std::env::var("SAFEAGENT_THEME")
-            .unwrap_or_else(|_| String::from("dark"))
-            .as_str(),
+        std::env::var("SAFEAGENT_THEME").unwrap_or_else(|_| String::from("dark")).as_str(),
         "light" | "soft"
     );
-
     if dark {
         DiagnosticsTheme {
-            border: "\x1b[38;5;240m",
-            title: "\x1b[38;5;153m",
-            muted: "\x1b[37m",
-            value: "\x1b[38;5;250m",
-            positive: "\x1b[38;5;83m",
-            warning: "\x1b[38;5;227m",
-            highlight: "\x1b[38;5;117m",
-            reset: "\x1b[0m",
+            border: "\x1b[38;5;240m", title: "\x1b[38;5;153m", muted: "\x1b[37m",
+            value: "\x1b[38;5;250m", positive: "\x1b[38;5;83m", warning: "\x1b[38;5;227m",
+            highlight: "\x1b[38;5;117m", reset: "\x1b[0m",
         }
     } else {
         DiagnosticsTheme {
-            border: "\x1b[90m",
-            title: "\x1b[36m",
-            muted: "\x1b[90m",
-            value: "\x1b[90m",
-            positive: "\x1b[32m",
-            warning: "\x1b[33m",
-            highlight: "\x1b[34m",
-            reset: "\x1b[0m",
+            border: "\x1b[90m", title: "\x1b[36m", muted: "\x1b[90m",
+            value: "\x1b[90m", positive: "\x1b[32m", warning: "\x1b[33m",
+            highlight: "\x1b[34m", reset: "\x1b[0m",
         }
     }
 }
 
 fn status_color_code(status: &str) -> &'static str {
     match status {
-        "hit+write" => "\x1b[92m",
-        "hit" => "\x1b[92m",
+        "hit+write" | "hit" => "\x1b[92m",
         "write" => "\x1b[93m",
         "below_threshold" => "\x1b[94m",
         "miss" => "\x1b[91m",
@@ -755,9 +645,7 @@ fn status_color_code(status: &str) -> &'static str {
 }
 
 fn supports_color() -> bool {
-    if std::env::var_os("NO_COLOR").is_some() {
-        return false;
-    }
+    if std::env::var_os("NO_COLOR").is_some() { return false; }
     std::env::var("TERM").map(|v| v != "dumb").unwrap_or(false)
 }
 
@@ -788,11 +676,7 @@ struct CachePlanDecision {
 }
 
 fn model_tier_rank(tier: ModelTier) -> u8 {
-    match tier {
-        ModelTier::Economy => 0,
-        ModelTier::Standard => 1,
-        ModelTier::Premium => 2,
-    }
+    match tier { ModelTier::Economy => 0, ModelTier::Standard => 1, ModelTier::Premium => 2 }
 }
 
 fn model_supports_request(model: &ModelConfig, request: &LlmRequest) -> bool {
@@ -807,10 +691,7 @@ fn estimated_cost_microdollars(model: &ModelConfig, input_tokens: u32, output_to
 }
 
 fn estimated_cached_cost_microdollars(
-    model: &ModelConfig,
-    input_tokens: u32,
-    output_tokens: u32,
-    cache_read_tokens: u32,
+    model: &ModelConfig, input_tokens: u32, output_tokens: u32, cache_read_tokens: u32,
 ) -> f64 {
     let in_per_token = model.cost_per_1k_input_microdollars as f64 / 1000.0;
     let out_per_token = model.cost_per_1k_output_microdollars as f64 / 1000.0;
@@ -822,21 +703,14 @@ fn estimated_cached_cost_microdollars(
 
 fn threshold_penalty_multiplier(model_name: &str, estimated_total_input_tokens: u32) -> f64 {
     let min_tokens = cache_min_tokens_for_model(model_name);
-    if estimated_total_input_tokens >= min_tokens {
-        return 1.0;
-    }
-    let deficit_ratio =
-        (min_tokens.saturating_sub(estimated_total_input_tokens)) as f64 / min_tokens as f64;
+    if estimated_total_input_tokens >= min_tokens { return 1.0; }
+    let deficit_ratio = (min_tokens.saturating_sub(estimated_total_input_tokens)) as f64 / min_tokens as f64;
     1.0 + 0.5 * deficit_ratio
 }
 
 fn estimate_total_input_tokens(request: &LlmRequest) -> u32 {
     let char_count = request.system_prompt.chars().count()
-        + request
-            .messages
-            .iter()
-            .map(|m| m.role.chars().count() + m.content.chars().count())
-            .sum::<usize>();
+        + request.messages.iter().map(|m| m.role.chars().count() + m.content.chars().count()).sum::<usize>();
     let base = ((char_count as u32) + 3) / 4;
     (base.saturating_mul(3) / 2).saturating_add(256)
 }
@@ -854,21 +728,14 @@ fn stable_prefix_fingerprint(request: &LlmRequest) -> u64 {
 
 fn cache_min_tokens_for_model(model_name: &str) -> u32 {
     let n = model_name.to_lowercase();
-    if n.contains("opus-4-6") || n.contains("opus-4-5") {
-        4096
-    } else if n.contains("haiku-4-5") || n.contains("haiku") {
-        4096
-    } else {
-        1024
-    }
+    if n.contains("opus-4-6") || n.contains("opus-4-5") { 4096 }
+    else if n.contains("haiku-4-5") || n.contains("haiku") { 4096 }
+    else { 1024 }
 }
 
 fn choose_model_with_cache_affinity(
-    chat_id: &ChatId,
-    request: &LlmRequest,
-    routed_model: ModelConfig,
-    models: &[ModelConfig],
-    affinities: &mut HashMap<String, ChatCacheAffinity>,
+    chat_id: &ChatId, request: &LlmRequest, routed_model: ModelConfig,
+    models: &[ModelConfig], affinities: &mut HashMap<String, ChatCacheAffinity>,
 ) -> (ModelConfig, CachePlanDecision) {
     let now = chrono::Utc::now();
     let chat_key = chat_id.0.clone();
@@ -887,9 +754,7 @@ fn choose_model_with_cache_affinity(
     };
 
     let routed_effective_cost = estimated_cost_microdollars(
-        &routed_model,
-        estimated_total_input_tokens,
-        estimated_output_tokens,
+        &routed_model, estimated_total_input_tokens, estimated_output_tokens,
     ) * threshold_penalty_multiplier(&routed_model.model_name, estimated_total_input_tokens);
 
     let mut base_model = routed_model.clone();
@@ -898,8 +763,7 @@ fn choose_model_with_cache_affinity(
     if estimated_total_input_tokens < decision.min_cache_tokens {
         let routed_rank = model_tier_rank(routed_model.tier);
         let max_candidate_rank = (routed_rank + 1).min(2);
-        if let Some(candidate) = models
-            .iter()
+        if let Some(candidate) = models.iter()
             .filter(|m| m.id != routed_model.id)
             .filter(|m| model_supports_request(m, request))
             .filter(|m| model_tier_rank(m.tier) <= max_candidate_rank)
@@ -911,8 +775,7 @@ fn choose_model_with_cache_affinity(
             })
         {
             let candidate_effective_cost = estimated_cost_microdollars(
-                candidate, estimated_total_input_tokens, estimated_output_tokens,
-            );
+                candidate, estimated_total_input_tokens, estimated_output_tokens);
             if candidate_effective_cost <= routed_effective_cost * 6.0 {
                 base_model = candidate.clone();
                 base_effective_cost = candidate_effective_cost;
@@ -923,8 +786,7 @@ fn choose_model_with_cache_affinity(
     }
 
     if estimated_total_input_tokens < decision.min_cache_tokens {
-        if let Some(candidate) = models
-            .iter()
+        if let Some(candidate) = models.iter()
             .filter(|m| m.id != routed_model.id)
             .filter(|m| model_supports_request(m, request))
             .filter(|m| model_tier_rank(m.tier) <= model_tier_rank(routed_model.tier))
@@ -949,44 +811,33 @@ fn choose_model_with_cache_affinity(
     }
 
     let maybe_state = affinities.get(&chat_key).cloned();
-    let Some(state) = maybe_state else {
-        return (base_model, decision);
-    };
+    let Some(state) = maybe_state else { return (base_model, decision); };
 
     if state.expires_at <= now {
         affinities.remove(&chat_key);
         decision.reason = "affinity_expired";
         return (base_model, decision);
     }
-
     if !model_supports_request(&state.model, request) {
         decision.reason = "affinity_capability_mismatch";
         return (base_model, decision);
     }
-
     if model_tier_rank(state.model.tier) < model_tier_rank(base_model.tier) {
         decision.reason = "quality_escalation";
         return (base_model, decision);
     }
-
     if state.prefix_fingerprint != prefix_fingerprint {
         decision.reason = "prefix_changed";
         return (base_model, decision);
     }
-
     if state.last_cache_write_tokens == 0 {
         decision.reason = "no_cache_seed";
         return (base_model, decision);
     }
 
-    let expected_cache_read_tokens = state
-        .last_cache_write_tokens
-        .min(estimated_total_input_tokens);
+    let expected_cache_read_tokens = state.last_cache_write_tokens.min(estimated_total_input_tokens);
     let sticky_effective_cost = estimated_cached_cost_microdollars(
-        &state.model,
-        estimated_total_input_tokens,
-        estimated_output_tokens,
-        expected_cache_read_tokens,
+        &state.model, estimated_total_input_tokens, estimated_output_tokens, expected_cache_read_tokens,
     ) * threshold_penalty_multiplier(&state.model.model_name, estimated_total_input_tokens);
 
     decision.expected_cache_read_tokens = expected_cache_read_tokens;
@@ -1001,12 +852,9 @@ fn choose_model_with_cache_affinity(
 }
 
 fn update_cache_affinity(
-    affinities: &mut HashMap<String, ChatCacheAffinity>,
-    chat_id: &ChatId,
-    model: &ModelConfig,
-    prefix_fingerprint: u64,
-    cache_creation_input_tokens: u32,
-    cache_read_input_tokens: u32,
+    affinities: &mut HashMap<String, ChatCacheAffinity>, chat_id: &ChatId,
+    model: &ModelConfig, prefix_fingerprint: u64,
+    cache_creation_input_tokens: u32, cache_read_input_tokens: u32,
 ) {
     let now = chrono::Utc::now();
     let key = chat_id.0.clone();
@@ -1023,43 +871,27 @@ fn update_cache_affinity(
         }
     }
 
-    affinities.insert(
-        key,
-        ChatCacheAffinity {
-            model: model.clone(),
-            prefix_fingerprint,
-            last_cache_write_tokens,
-            expires_at: now + chrono::Duration::minutes(8),
-        },
-    );
+    affinities.insert(key, ChatCacheAffinity {
+        model: model.clone(), prefix_fingerprint, last_cache_write_tokens,
+        expires_at: now + chrono::Duration::minutes(8),
+    });
 }
 
 async fn call_anthropic(
-    client: &reqwest::Client,
-    model: &ModelConfig,
-    api_key: &SensitiveString,
-    request: &LlmRequest,
-    dynamic_system_context: &str,
+    client: &reqwest::Client, model: &ModelConfig, api_key: &SensitiveString,
+    request: &LlmRequest, dynamic_system_context: &str,
 ) -> Result<ApiResponse> {
     let messages = build_anthropic_messages_with_breakpoint(&request.messages);
 
     let system_blocks = if dynamic_system_context.trim().is_empty() {
         serde_json::json!([{
-            "type": "text",
-            "text": request.system_prompt,
+            "type": "text", "text": request.system_prompt,
             "cache_control": {"type": "ephemeral"}
         }])
     } else {
         serde_json::json!([
-            {
-                "type": "text",
-                "text": request.system_prompt,
-                "cache_control": {"type": "ephemeral"}
-            },
-            {
-                "type": "text",
-                "text": dynamic_system_context
-            }
+            { "type": "text", "text": request.system_prompt, "cache_control": {"type": "ephemeral"} },
+            { "type": "text", "text": dynamic_system_context }
         ])
     };
 
@@ -1091,19 +923,13 @@ async fn call_anthropic(
     let usage = &data["usage"];
     let cache_creation_input_tokens = usage["cache_creation_input_tokens"]
         .as_u64()
-        .or_else(|| {
-            usage["cache_creation"]["ephemeral_5m_input_tokens"].as_u64().map(|v| {
-                v + usage["cache_creation"]["ephemeral_1h_input_tokens"].as_u64().unwrap_or(0)
-            })
-        })
+        .or_else(|| usage["cache_creation"]["ephemeral_5m_input_tokens"].as_u64().map(|v|
+            v + usage["cache_creation"]["ephemeral_1h_input_tokens"].as_u64().unwrap_or(0)))
         .unwrap_or(0) as u32;
     let cache_read_input_tokens = usage["cache_read_input_tokens"]
         .as_u64()
-        .or_else(|| {
-            usage["cache_read"]["ephemeral_5m_input_tokens"].as_u64().map(|v| {
-                v + usage["cache_read"]["ephemeral_1h_input_tokens"].as_u64().unwrap_or(0)
-            })
-        })
+        .or_else(|| usage["cache_read"]["ephemeral_5m_input_tokens"].as_u64().map(|v|
+            v + usage["cache_read"]["ephemeral_1h_input_tokens"].as_u64().unwrap_or(0)))
         .unwrap_or(0) as u32;
 
     Ok(ApiResponse {
@@ -1115,15 +941,9 @@ async fn call_anthropic(
     })
 }
 
-async fn get_voyage_embedding(
-    client: &reqwest::Client,
-    api_key: &str,
-    text: &str,
-) -> Option<Vec<f32>> {
+async fn get_voyage_embedding(client: &reqwest::Client, api_key: &str, text: &str) -> Option<Vec<f32>> {
     let body = serde_json::json!({
-        "input": [text],
-        "model": "voyage-3-large",
-        "input_type": "query"
+        "input": [text], "model": "voyage-3-large", "input_type": "query"
     });
 
     let resp = client
@@ -1136,24 +956,13 @@ async fn get_voyage_embedding(
         .ok()?;
 
     let data: serde_json::Value = resp.json().await.ok()?;
-    let emb = data["data"][0]["embedding"]
-        .as_array()?
-        .iter()
-        .map(|v| v.as_f64().unwrap_or(0.0) as f32)
-        .collect();
+    let emb = data["data"][0]["embedding"].as_array()?
+        .iter().map(|v| v.as_f64().unwrap_or(0.0) as f32).collect();
     Some(emb)
 }
 
 fn build_anthropic_messages_with_breakpoint(messages: &[LlmMessage]) -> Vec<serde_json::Value> {
-    messages
-        .iter()
-        .map(|m| {
-            serde_json::json!({
-                "role": m.role,
-                "content": m.content
-            })
-        })
-        .collect()
+    messages.iter().map(|m| serde_json::json!({"role": m.role, "content": m.content})).collect()
 }
 
 fn build_stable_system_prompt() -> String {
@@ -1253,22 +1062,12 @@ fn build_stable_system_prompt() -> String {
     )
 }
 
-fn build_dynamic_system_context(
-    platform: Platform,
-    facts_text: &str,
-    tier_prompt_overlay: &str,
-) -> String {
+fn build_dynamic_system_context(platform: Platform, facts_text: &str, tier_prompt_overlay: &str) -> String {
     let platform_hint = match platform {
-        Platform::Telegram => {
-            "Platform: Telegram. Do not use markdown headings (#). Keep output short and chat-friendly."
-        }
+        Platform::Telegram => "Platform: Telegram. Do not use markdown headings (#). Keep output short and chat-friendly.",
         _ => "Platform: CLI. Keep output compact and terminal-friendly.",
     };
-
-    format!(
-        "{}\n{}\n\nKnown facts about the user:\n{}",
-        platform_hint, tier_prompt_overlay, facts_text
-    )
+    format!("{}\n{}\n\nKnown facts about the user:\n{}", platform_hint, tier_prompt_overlay, facts_text)
 }
 
 fn build_tier_prompt_overlay(tier: ModelTier, platform: Platform) -> String {
@@ -1276,53 +1075,23 @@ fn build_tier_prompt_overlay(tier: ModelTier, platform: Platform) -> String {
         Platform::Telegram => "Keep outputs compact and conversational for chat UI.",
         _ => "Use concise formatting suitable for terminal and logs.",
     };
-
     let tier_overlay = match tier {
-        ModelTier::Economy => {
-            "Tier profile: Economy.\n\
-             Keep answer short (1-4 sentences unless asked for more).\n\
-             Prioritize direct answer first, then one short supporting detail."
-        }
-        ModelTier::Standard => {
-            "Tier profile: Standard.\n\
-             Give a balanced answer with brief structure: answer, rationale, next step.\n\
-             For code requests, provide minimal correct code plus concise explanation."
-        }
-        ModelTier::Premium => {
-            "Tier profile: Premium.\n\
-             Provide deep analysis with assumptions, trade-offs, and recommendation.\n\
-             For complex tasks, include explicit decision criteria and risks.\n\
-             Keep output high-signal and avoid filler."
-        }
+        ModelTier::Economy => "Tier profile: Economy.\nKeep answer short (1-4 sentences unless asked for more).\nPrioritize direct answer first, then one short supporting detail.",
+        ModelTier::Standard => "Tier profile: Standard.\nGive a balanced answer with brief structure: answer, rationale, next step.\nFor code requests, provide minimal correct code plus concise explanation.",
+        ModelTier::Premium => "Tier profile: Premium.\nProvide deep analysis with assumptions, trade-offs, and recommendation.\nFor complex tasks, include explicit decision criteria and risks.\nKeep output high-signal and avoid filler.",
     };
-
     format!("{}\n{}", tier_overlay, platform_style)
 }
 
 fn apply_tier_request_tuning(request: &mut LlmRequest, tier: ModelTier) {
     match tier {
-        ModelTier::Economy => {
-            request.max_tokens = Some(1200);
-            request.temperature = Some(0.3);
-        }
-        ModelTier::Standard => {
-            request.max_tokens = Some(2800);
-            request.temperature = Some(0.45);
-        }
-        ModelTier::Premium => {
-            request.max_tokens = Some(4096);
-            request.temperature = Some(0.6);
-        }
+        ModelTier::Economy => { request.max_tokens = Some(1200); request.temperature = Some(0.3); }
+        ModelTier::Standard => { request.max_tokens = Some(2800); request.temperature = Some(0.45); }
+        ModelTier::Premium => { request.max_tokens = Some(4096); request.temperature = Some(0.6); }
     }
 }
 
-fn get_or_prompt_key(
-    vault: &CredentialVault,
-    key: &str,
-    label: &str,
-    provider: &str,
-    hint: &str,
-) -> Result<SensitiveString> {
+fn get_or_prompt_key(vault: &CredentialVault, key: &str, label: &str, provider: &str, hint: &str) -> Result<SensitiveString> {
     match vault.get(key) {
         Ok(val) => Ok(val),
         Err(_) => {
@@ -1342,43 +1111,28 @@ fn get_or_prompt_key(
 fn default_models() -> Vec<ModelConfig> {
     vec![
         ModelConfig {
-            id: "haiku".into(),
-            provider: Provider::Anthropic,
+            id: "haiku".into(), provider: Provider::Anthropic,
             model_name: "claude-haiku-4-5-20251001".into(),
-            api_key_ref: "anthropic_key".into(),
-            api_base_url: None,
-            tier: ModelTier::Economy,
-            cost_per_1k_input_microdollars: 800,
-            cost_per_1k_output_microdollars: 3200,
-            max_context_tokens: 200_000,
-            supports_vision: true,
-            supports_tools: true,
+            api_key_ref: "anthropic_key".into(), api_base_url: None,
+            tier: ModelTier::Economy, cost_per_1k_input_microdollars: 800,
+            cost_per_1k_output_microdollars: 3200, max_context_tokens: 200_000,
+            supports_vision: true, supports_tools: true,
         },
         ModelConfig {
-            id: "sonnet".into(),
-            provider: Provider::Anthropic,
+            id: "sonnet".into(), provider: Provider::Anthropic,
             model_name: "claude-sonnet-4-5-20250929".into(),
-            api_key_ref: "anthropic_key".into(),
-            api_base_url: None,
-            tier: ModelTier::Standard,
-            cost_per_1k_input_microdollars: 3000,
-            cost_per_1k_output_microdollars: 15000,
-            max_context_tokens: 200_000,
-            supports_vision: true,
-            supports_tools: true,
+            api_key_ref: "anthropic_key".into(), api_base_url: None,
+            tier: ModelTier::Standard, cost_per_1k_input_microdollars: 3000,
+            cost_per_1k_output_microdollars: 15000, max_context_tokens: 200_000,
+            supports_vision: true, supports_tools: true,
         },
         ModelConfig {
-            id: "opus".into(),
-            provider: Provider::Anthropic,
+            id: "opus".into(), provider: Provider::Anthropic,
             model_name: "claude-opus-4-6".into(),
-            api_key_ref: "anthropic_key".into(),
-            api_base_url: None,
-            tier: ModelTier::Premium,
-            cost_per_1k_input_microdollars: 15000,
-            cost_per_1k_output_microdollars: 75000,
-            max_context_tokens: 200_000,
-            supports_vision: true,
-            supports_tools: true,
+            api_key_ref: "anthropic_key".into(), api_base_url: None,
+            tier: ModelTier::Premium, cost_per_1k_input_microdollars: 15000,
+            cost_per_1k_output_microdollars: 75000, max_context_tokens: 200_000,
+            supports_vision: true, supports_tools: true,
         },
     ]
 }
@@ -1402,7 +1156,7 @@ fn print_help() {
     println!("  │  SafeAgent Commands           │");
     println!("  ├──────────────────────────────┤");
     println!("  │  /help     - This menu        │");
-    println!("  │  /stats    - Usage stats      │");
+    println!("  │  /stats    - Cost report      │");
     println!("  │  /mode X   - Routing mode     │");
     println!("  │  /quit     - Exit             │");
     println!("  └──────────────────────────────┘");
