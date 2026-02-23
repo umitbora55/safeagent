@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Phase 7: Scale & Enterprise**
+  - Docker deployment (Dockerfile + docker-compose.yml)
+  - Webhook API (`POST /api/webhook/message`)
+  - MCP server (`/mcp` endpoint, JSON-RPC 2.0)
+  - Multi-user support with per-user isolation (vault, memory, limits)
+  - Team mode with shared skills and individual budgets
+  - Cloud hosting configs (Fly.io + Railway)
+- **Phase 6: Web UI & Dashboard**
+  - Browser-based dashboard with cost cards, model analytics
+  - Audit log viewer, conversation browser, settings UI
+  - REST API (5 endpoints: health, stats, audit, conversations, settings)
+  - HTMX + auto-refresh (15s interval)
+- **Phase 5: Streaming & UX**
+  - Token-by-token streaming for CLI
+  - Voice input (Whisper STT) and output (OpenAI TTS)
+  - Conversation export as Markdown and JSON (`safeagent export`)
+  - Auto-summarization for long conversations (>20 messages)
+- **Phase 4B: Write Skills**
+  - File Writer (allowlist dirs, create-only default)
+  - Calendar Writer (Google Calendar, daily limit)
+  - Email Sender (Gmail, recipient allowlist, daily limit)
+  - All write skills deny-all by default
 - **Skills framework** with SSRF protection, permission model, and rate limiting
 - **Web Search skill** (Brave Search API integration)
 - **URL Fetcher skill** with HTML-to-text extraction and content-type filtering
