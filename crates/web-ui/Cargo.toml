@@ -1,0 +1,18 @@
+[package]
+name = "safeagent-web-ui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum = "0.8"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+safeagent-cost-ledger = { path = "../cost-ledger" }
+safeagent-audit-log = { path = "../audit-log" }
+safeagent-memory = { path = "../memory" }
+safeagent-bridge-common = { path = "../bridges/common" }
+anyhow = { workspace = true }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = { workspace = true }
