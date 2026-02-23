@@ -1,3 +1,6 @@
+mod cmd_init;
+mod cmd_doctor;
+
 use anyhow::Result;
 use safeagent_bridge_common::*;
 use safeagent_credential_vault::{CredentialVault, SensitiveString};
@@ -17,10 +20,50 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
 
+use clap::{Parser, Subcommand};
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Parser)]
+#[command(name = "safeagent", version = VERSION, about = "Secure, cost-optimized AI assistant")]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Interactive setup wizard — configure vault, API keys, and platform
+    Init,
+    /// Diagnose common setup issues
+    Doctor,
+    /// Start the assistant (default if no command given)
+    Run,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let cli = Cli::parse();
+    let data_dir = get_data_dir();
+
+    match cli.command {
+        Some(Commands::Init) => {
+            cmd_init::run_init(&data_dir).await
+        }
+        Some(Commands::Doctor) => {
+            cmd_doctor::run_doctor(&data_dir).await
+        }
+        Some(Commands::Run) | None => {
+            run_agent(data_dir).await
+        }
+    }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  Main agent loop (previously the entire main fn)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async fn run_agent(data_dir: PathBuf) -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -35,7 +78,6 @@ async fn main() -> Result<()> {
     println!("  ─────────────────────");
     println!();
 
-    let data_dir = get_data_dir();
     std::fs::create_dir_all(&data_dir)?;
     tracing::info!("Data dir: {:?}", data_dir);
 
@@ -64,48 +106,18 @@ async fn main() -> Result<()> {
     let telegram_token = match vault.get("telegram_token") {
         Ok(t) => Some(t),
         Err(_) => {
-            println!("  📱 Telegram bot token bulunamadı.");
-            print!("  Token girin (veya Enter ile atla): ");
-            io::stdout().flush()?;
-            let mut input = String::new();
-            io::stdin().lock().read_line(&mut input)?;
-            let input = input.trim();
-            if input.is_empty() {
-                println!("  ℹ️  Telegram devre dışı, sadece CLI modu.");
-                None
-            } else {
-                let token = SensitiveString::new(input.to_string());
-                vault.store("telegram_token", "Telegram Bot Token", "telegram", &token)?;
-                println!("  ✅ Telegram token kaydedildi.");
-                Some(token)
-            }
+            println!("  ℹ️  Telegram not configured. Run `safeagent init` to set up.");
+            None
         }
     };
 
     // Check for Telegram chat ID
     let telegram_chat_id = match vault.get("telegram_chat_id") {
         Ok(id) => Some(id),
-        Err(_) => {
-            if telegram_token.is_some() {
-                print!("  Telegram chat ID girin: ");
-                io::stdout().flush()?;
-                let mut input = String::new();
-                io::stdin().lock().read_line(&mut input)?;
-                let input = input.trim();
-                if !input.is_empty() {
-                    let id = SensitiveString::new(input.to_string());
-                    vault.store("telegram_chat_id", "Telegram Chat ID", "telegram", &id)?;
-                    Some(id)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
+        Err(_) => None,
     };
 
-    println!("  ✅ Tüm sistemler hazır");
+    println!("  ✅ All systems ready");
     println!();
 
     // Central message channel — all bridges feed into this
@@ -130,7 +142,7 @@ async fn main() -> Result<()> {
             }
         });
 
-        println!("  📱 Telegram bridge aktif (@safeagent_new_bot)");
+        println!("  📱 Telegram bridge active");
     }
 
     // Start CLI input bridge (sends to central channel)
@@ -139,7 +151,7 @@ async fn main() -> Result<()> {
         cli_input_loop(cli_tx).await;
     });
 
-    println!("  💬 CLI aktif — mesaj yazın (veya /help, /quit)");
+    println!("  💬 CLI active — type a message (or /help, /quit)");
     println!();
 
     // Central processing loop
@@ -158,15 +170,15 @@ async fn main() -> Result<()> {
         if incoming.platform == Platform::Cli {
             match text.as_str() {
                 "/quit" | "/exit" | "/q" => {
-                    println!("\n  👋 Hoşça kal!");
+                    println!("\n  👋 Goodbye!");
                     break;
                 }
                 "/help" => { print_help(); continue; }
                 "/stats" => { print_stats(&router, &policy, &memory); continue; }
-                "/mode economy" => { router.set_mode(RoutingMode::Economy); println!("  🔄 Economy modu"); continue; }
-                "/mode balanced" => { router.set_mode(RoutingMode::Balanced); println!("  🔄 Balanced modu"); continue; }
-                "/mode performance" => { router.set_mode(RoutingMode::Performance); println!("  🔄 Performance modu"); continue; }
-                s if s.starts_with('/') => { println!("  ❓ Bilinmeyen komut. /help"); continue; }
+                "/mode economy" => { router.set_mode(RoutingMode::Economy); println!("  🔄 Economy mode"); continue; }
+                "/mode balanced" => { router.set_mode(RoutingMode::Balanced); println!("  🔄 Balanced mode"); continue; }
+                "/mode performance" => { router.set_mode(RoutingMode::Performance); println!("  🔄 Performance mode"); continue; }
+                s if s.starts_with('/') => { println!("  ❓ Unknown command. /help"); continue; }
                 _ => {}
             }
         }
@@ -175,11 +187,11 @@ async fn main() -> Result<()> {
         let source = if incoming.platform == Platform::Cli {
             ContentSource::User
         } else {
-            ContentSource::User // Direct user message from any platform
+            ContentSource::User
         };
         let sanitized = guard.sanitize(&text, source);
         if sanitized.risk_score >= 0.5 {
-            let warning = format!("⚠️ Güvenlik tehdidi: risk {:.0}%", sanitized.risk_score * 100.0);
+            let warning = format!("⚠️ Security threat detected: risk {:.0}%", sanitized.risk_score * 100.0);
             send_response(&incoming, &warning, &telegram_outbox_tx).await;
             continue;
         }
@@ -198,7 +210,6 @@ async fn main() -> Result<()> {
         let _ = memory.add_message(&user_entry);
 
         // 3. Build LLM request
-        // Use a stable prefix (oldest) + a dynamic tail (recent) to improve cache reads.
         let oldest = memory.oldest_messages(&incoming.chat_id, 12).unwrap_or_default();
         let recent = memory.recent_messages(&incoming.chat_id, 8).unwrap_or_default();
         let mut seen_ids = HashSet::new();
@@ -277,7 +288,7 @@ async fn main() -> Result<()> {
         let routed_model = match router.select_model(&routing_request) {
             Some(m) => m,
             None => {
-                send_response(&incoming, "❌ Model bulunamadı", &telegram_outbox_tx).await;
+                send_response(&incoming, "❌ No model available", &telegram_outbox_tx).await;
                 continue;
             }
         };
@@ -360,16 +371,11 @@ async fn main() -> Result<()> {
 
                 // Send to Telegram if message came from there
                 if incoming.platform == Platform::Telegram {
-                    // Strip markdown headings that Telegram doesn't support
                     let clean_content = response.content
                         .lines()
                         .map(|line| {
                             let trimmed = line.trim_start();
-                            if trimmed.starts_with("# ") {
-                                trimmed.trim_start_matches('#').trim()
-                            } else if trimmed.starts_with("## ") {
-                                trimmed.trim_start_matches('#').trim()
-                            } else if trimmed.starts_with("### ") {
+                            if trimmed.starts_with("# ") || trimmed.starts_with("## ") || trimmed.starts_with("### ") {
                                 trimmed.trim_start_matches('#').trim()
                             } else {
                                 line
@@ -405,7 +411,7 @@ async fn main() -> Result<()> {
             }
             Err(e) => {
                 router.record_model_error(&model.id);
-                let err_msg = format!("❌ Hata: {}", e);
+                let err_msg = format!("❌ Error: {}", e);
                 send_response(&incoming, &err_msg, &telegram_outbox_tx).await;
                 if incoming.platform == Platform::Cli {
                     println!("  {}\n", err_msg);
@@ -418,6 +424,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  All helper functions below — unchanged from original
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 async fn cli_input_loop(tx: mpsc::Sender<IncomingMessage>) {
@@ -808,7 +816,6 @@ fn estimated_cached_cost_microdollars(
     let out_per_token = model.cost_per_1k_output_microdollars as f64 / 1000.0;
     let read = cache_read_tokens.min(input_tokens) as f64;
     let uncached = input_tokens.saturating_sub(cache_read_tokens.min(input_tokens)) as f64;
-    // Anthropic prompt cache read cost is ~10% of base input token cost.
     let input_cost = read * in_per_token * 0.10 + uncached * in_per_token;
     input_cost + output_tokens as f64 * out_per_token
 }
@@ -820,7 +827,6 @@ fn threshold_penalty_multiplier(model_name: &str, estimated_total_input_tokens: 
     }
     let deficit_ratio =
         (min_tokens.saturating_sub(estimated_total_input_tokens)) as f64 / min_tokens as f64;
-    // 1.0..1.5 penalty when under cache threshold.
     1.0 + 0.5 * deficit_ratio
 }
 
@@ -831,8 +837,6 @@ fn estimate_total_input_tokens(request: &LlmRequest) -> u32 {
             .iter()
             .map(|m| m.role.chars().count() + m.content.chars().count())
             .sum::<usize>();
-    // Conservative planner estimate to avoid false "below threshold" routing decisions.
-    // Raw chars/4 tends to under-estimate multilingual prompts with long system context.
     let base = ((char_count as u32) + 3) / 4;
     (base.saturating_mul(3) / 2).saturating_add(256)
 }
@@ -840,8 +844,6 @@ fn estimate_total_input_tokens(request: &LlmRequest) -> u32 {
 fn stable_prefix_fingerprint(request: &LlmRequest) -> u64 {
     let mut hasher = DefaultHasher::new();
     request.system_prompt.hash(&mut hasher);
-
-    // Use a fixed oldest slice for stickier cache affinity.
     let stable_count = request.messages.len().min(4);
     for m in request.messages.iter().take(stable_count) {
         m.role.hash(&mut hasher);
@@ -884,7 +886,6 @@ fn choose_model_with_cache_affinity(
         min_cache_tokens: cache_min_tokens_for_model(&routed_model.model_name),
     };
 
-    // Stage 1: penalize models below cache threshold when comparable alternatives exist.
     let routed_effective_cost = estimated_cost_microdollars(
         &routed_model,
         estimated_total_input_tokens,
@@ -894,9 +895,6 @@ fn choose_model_with_cache_affinity(
     let mut base_model = routed_model.clone();
     let mut base_effective_cost = routed_effective_cost;
 
-    // Stage 0: cache bootstrap upgrade.
-    // If routed model is below its cache threshold, consider moving up one tier
-    // to the cheapest model that is already cache-eligible for this request size.
     if estimated_total_input_tokens < decision.min_cache_tokens {
         let routed_rank = model_tier_rank(routed_model.tier);
         let max_candidate_rank = (routed_rank + 1).min(2);
@@ -907,27 +905,14 @@ fn choose_model_with_cache_affinity(
             .filter(|m| model_tier_rank(m.tier) <= max_candidate_rank)
             .filter(|m| estimated_total_input_tokens >= cache_min_tokens_for_model(&m.model_name))
             .min_by(|a, b| {
-                let a_cost = estimated_cost_microdollars(
-                    a,
-                    estimated_total_input_tokens,
-                    estimated_output_tokens,
-                );
-                let b_cost = estimated_cost_microdollars(
-                    b,
-                    estimated_total_input_tokens,
-                    estimated_output_tokens,
-                );
-                a_cost
-                    .partial_cmp(&b_cost)
-                    .unwrap_or(std::cmp::Ordering::Equal)
+                let a_cost = estimated_cost_microdollars(a, estimated_total_input_tokens, estimated_output_tokens);
+                let b_cost = estimated_cost_microdollars(b, estimated_total_input_tokens, estimated_output_tokens);
+                a_cost.partial_cmp(&b_cost).unwrap_or(std::cmp::Ordering::Equal)
             })
         {
             let candidate_effective_cost = estimated_cost_microdollars(
-                candidate,
-                estimated_total_input_tokens,
-                estimated_output_tokens,
+                candidate, estimated_total_input_tokens, estimated_output_tokens,
             );
-            // Allow moderate cost increase to activate cache and unlock future reads.
             if candidate_effective_cost <= routed_effective_cost * 6.0 {
                 base_model = candidate.clone();
                 base_effective_cost = candidate_effective_cost;
@@ -944,25 +929,15 @@ fn choose_model_with_cache_affinity(
             .filter(|m| model_supports_request(m, request))
             .filter(|m| model_tier_rank(m.tier) <= model_tier_rank(routed_model.tier))
             .min_by(|a, b| {
-                let a_cost = estimated_cost_microdollars(
-                    a,
-                    estimated_total_input_tokens,
-                    estimated_output_tokens,
-                ) * threshold_penalty_multiplier(&a.model_name, estimated_total_input_tokens);
-                let b_cost = estimated_cost_microdollars(
-                    b,
-                    estimated_total_input_tokens,
-                    estimated_output_tokens,
-                ) * threshold_penalty_multiplier(&b.model_name, estimated_total_input_tokens);
-                a_cost
-                    .partial_cmp(&b_cost)
-                    .unwrap_or(std::cmp::Ordering::Equal)
+                let a_cost = estimated_cost_microdollars(a, estimated_total_input_tokens, estimated_output_tokens)
+                    * threshold_penalty_multiplier(&a.model_name, estimated_total_input_tokens);
+                let b_cost = estimated_cost_microdollars(b, estimated_total_input_tokens, estimated_output_tokens)
+                    * threshold_penalty_multiplier(&b.model_name, estimated_total_input_tokens);
+                a_cost.partial_cmp(&b_cost).unwrap_or(std::cmp::Ordering::Equal)
             })
         {
             let candidate_effective_cost = estimated_cost_microdollars(
-                candidate,
-                estimated_total_input_tokens,
-                estimated_output_tokens,
+                candidate, estimated_total_input_tokens, estimated_output_tokens,
             ) * threshold_penalty_multiplier(&candidate.model_name, estimated_total_input_tokens);
             if candidate_effective_cost < routed_effective_cost * 0.95 {
                 base_model = candidate.clone();
@@ -1068,8 +1043,6 @@ async fn call_anthropic(
 ) -> Result<ApiResponse> {
     let messages = build_anthropic_messages_with_breakpoint(&request.messages);
 
-    // Layered system prompt with explicit stable breakpoint:
-    // Block 1 (stable) is cacheable, Block 2 (dynamic) is uncached.
     let system_blocks = if dynamic_system_context.trim().is_empty() {
         serde_json::json!([{
             "type": "text",
@@ -1172,7 +1145,6 @@ async fn get_voyage_embedding(
 }
 
 fn build_anthropic_messages_with_breakpoint(messages: &[LlmMessage]) -> Vec<serde_json::Value> {
-    // Keep payload deterministic and let top-level automatic cache pick breakpoints.
     messages
         .iter()
         .map(|m| {
@@ -1185,8 +1157,6 @@ fn build_anthropic_messages_with_breakpoint(messages: &[LlmMessage]) -> Vec<serd
 }
 
 fn build_stable_system_prompt() -> String {
-    // Keep this block fully deterministic and above Sonnet cache threshold.
-    // Dynamic context (facts, platform style, tier behavior) is appended in an uncached block.
     String::from(
         "You are SafeAgent, a secure personal AI assistant.\n\
          Core behavior:\n\
@@ -1356,14 +1326,14 @@ fn get_or_prompt_key(
     match vault.get(key) {
         Ok(val) => Ok(val),
         Err(_) => {
-            println!("  📝 {} bulunamadı.", label);
-            print!("  Girin ({}): ", hint);
+            println!("  📝 {} not found.", label);
+            print!("  Enter ({}): ", hint);
             io::stdout().flush()?;
             let mut input = String::new();
             io::stdin().lock().read_line(&mut input)?;
             let val = SensitiveString::new(input.trim().to_string());
             vault.store(key, label, provider, &val)?;
-            println!("  ✅ Kaydedildi.");
+            println!("  ✅ Stored.");
             Ok(val)
         }
     }
@@ -1420,7 +1390,7 @@ fn get_data_dir() -> PathBuf {
 }
 
 fn prompt_password() -> Result<SensitiveString> {
-    print!("  🔐 Vault şifresi: ");
+    print!("  🔐 Vault password: ");
     io::stdout().flush()?;
     let mut pwd = String::new();
     io::stdin().lock().read_line(&mut pwd)?;
@@ -1431,10 +1401,10 @@ fn print_help() {
     println!("  ┌──────────────────────────────┐");
     println!("  │  SafeAgent Commands           │");
     println!("  ├──────────────────────────────┤");
-    println!("  │  /help     - Bu menü          │");
-    println!("  │  /stats    - Kullanım bilgisi │");
-    println!("  │  /mode X   - Model modu       │");
-    println!("  │  /quit     - Çıkış            │");
+    println!("  │  /help     - This menu        │");
+    println!("  │  /stats    - Usage stats      │");
+    println!("  │  /mode X   - Routing mode     │");
+    println!("  │  /quit     - Exit             │");
     println!("  └──────────────────────────────┘");
     println!();
 }
