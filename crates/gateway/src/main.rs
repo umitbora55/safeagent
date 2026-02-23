@@ -1,9 +1,11 @@
 mod cmd_init;
 mod cmd_doctor;
 mod cmd_stats;
+mod cmd_audit;
 
 use anyhow::Result;
 use safeagent_bridge_common::*;
+use safeagent_audit_log::{AuditEntry as AuditLogEntry, AuditLog};
 use safeagent_cost_ledger::{CostEntry, CostLedger};
 use safeagent_credential_vault::{CredentialVault, SensitiveString};
 use safeagent_llm_router::{
@@ -41,6 +43,8 @@ enum Commands {
     Doctor,
     /// Show cost report (daily/weekly/monthly)
     Stats,
+    /// Browse audit log
+    Audit,
     /// Start the assistant (default if no command given)
     Run,
 }
@@ -59,6 +63,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Stats) => {
             cmd_stats::run_stats(&data_dir)
+        }
+        Some(Commands::Audit) => {
+            cmd_audit::run_audit(&data_dir)
         }
         Some(Commands::Run) | None => {
             run_agent(data_dir).await
@@ -89,6 +96,8 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
     let guard = Arc::new(PromptGuard::with_defaults());
     let vault = Arc::new(CredentialVault::new(data_dir.join("vault.db"))?);
     let ledger = Arc::new(CostLedger::new(data_dir.join("cost_ledger.db"))
+        .map_err(|e| anyhow::anyhow!("{}", e))?);
+    let audit = Arc::new(AuditLog::new(data_dir.join("audit.db"), 30, 200)
         .map_err(|e| anyhow::anyhow!("{}", e))?);
     let session_cost = Arc::new(std::sync::atomic::AtomicU64::new(0));
 
@@ -389,6 +398,22 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
                     latency_ms: latency,
                 });
 
+                let _ = audit.record(&AuditLogEntry {
+                    timestamp: chrono::Utc::now(),
+                    event_type: "llm_request".to_string(),
+                    model_name: model.model_name.clone(),
+                    tier: tier_str.to_string(),
+                    platform: format!("{:?}", incoming.platform).to_lowercase(),
+                    input_tokens: response.input_tokens,
+                    output_tokens: response.output_tokens,
+                    cost_microdollars: cost,
+                    cache_status: cache_status.to_string(),
+                    latency_ms: latency,
+                    success: true,
+                    error_message: None,
+                    metadata: "{}".to_string(),
+                });
+
                 session_cost.fetch_add(cost, std::sync::atomic::Ordering::Relaxed);
                 let session_usd = session_cost.load(std::sync::atomic::Ordering::Relaxed) as f64 / 1_000_000.0;
                 let today_usd = ledger.today_summary().map(|s| s.cost_usd()).unwrap_or(0.0);
@@ -453,6 +478,18 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
             }
             Err(e) => {
                 router.record_model_error(&model.id);
+                let _ = audit.record(&AuditLogEntry {
+                    timestamp: chrono::Utc::now(),
+                    event_type: "llm_error".to_string(),
+                    model_name: model.model_name.clone(),
+                    tier: String::new(),
+                    platform: format!("{:?}", incoming.platform).to_lowercase(),
+                    input_tokens: 0, output_tokens: 0, cost_microdollars: 0,
+                    cache_status: String::new(), latency_ms: 0,
+                    success: false,
+                    error_message: Some(format!("{}", e)),
+                    metadata: "{}".to_string(),
+                });
                 let err_msg = format!("❌ Error: {}", e);
                 send_response(&incoming, &err_msg, &telegram_outbox_tx).await;
                 if incoming.platform == Platform::Cli {

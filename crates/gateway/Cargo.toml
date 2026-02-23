@@ -28,3 +28,4 @@ safeagent-credential-vault = { path = "../credential-vault" }
 safeagent-memory = { path = "../memory" }
 safeagent-bridge-telegram = { path = "../bridges/telegram" }
 safeagent-cost-ledger = { path = "../cost-ledger" }
+safeagent-audit-log = { path = "../audit-log" }
