@@ -7,6 +7,7 @@ pub mod email_reader;
 pub mod file_writer;
 pub mod calendar_writer;
 pub mod email_sender;
+pub mod voice;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
