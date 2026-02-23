@@ -1,0 +1,24 @@
+{"prompt": "merhaba", "expected_tier": "economy", "task_type": "greeting"}
+{"prompt": "selam nasılsın", "expected_tier": "economy", "task_type": "greeting"}
+{"prompt": "hi", "expected_tier": "economy", "task_type": "greeting"}
+{"prompt": "hello", "expected_tier": "economy", "task_type": "greeting"}
+{"prompt": "teşekkürler", "expected_tier": "economy", "task_type": "greeting"}
+{"prompt": "ok", "expected_tier": "economy", "task_type": "greeting"}
+{"prompt": "türkiye'nin başkenti neresi", "expected_tier": "economy", "task_type": "factual"}
+{"prompt": "what is 2+2", "expected_tier": "economy", "task_type": "factual"}
+{"prompt": "bugün hava nasıl", "expected_tier": "economy", "task_type": "factual"}
+{"prompt": "python'da liste nasıl oluşturulur", "expected_tier": "economy", "task_type": "code_simple"}
+{"prompt": "javascript'te for loop yaz", "expected_tier": "economy", "task_type": "code_simple"}
+{"prompt": "write a python function to reverse a string", "expected_tier": "economy", "task_type": "code_simple"}
+{"prompt": "explain the difference between TCP and UDP", "expected_tier": "standard", "task_type": "explanation"}
+{"prompt": "write a REST API in Rust with authentication and database", "expected_tier": "standard", "task_type": "code_complex"}
+{"prompt": "microservices vs monolith mimarisini karşılaştır", "expected_tier": "standard", "task_type": "analysis"}
+{"prompt": "react ile bir todo app yaz, state management ile", "expected_tier": "standard", "task_type": "code_complex"}
+{"prompt": "kubernetes'te pod scheduling nasıl çalışır açıkla", "expected_tier": "standard", "task_type": "explanation"}
+{"prompt": "write unit tests for a complex async Rust module with error handling", "expected_tier": "standard", "task_type": "code_complex"}
+{"prompt": "design a distributed caching system that handles cache invalidation across multiple data centers", "expected_tier": "premium", "task_type": "architecture"}
+{"prompt": "analyze the trade-offs between eventual consistency and strong consistency in distributed databases, with real-world examples", "expected_tier": "premium", "task_type": "deep_analysis"}
+{"prompt": "write a complete compiler frontend for a simple programming language including lexer, parser, and AST", "expected_tier": "premium", "task_type": "code_advanced"}
+{"prompt": "explain the mathematical proof behind the CAP theorem and its practical implications", "expected_tier": "premium", "task_type": "reasoning"}
+{"prompt": "design a secure multi-tenant SaaS architecture with data isolation, rate limiting, and audit logging", "expected_tier": "premium", "task_type": "architecture"}
+{"prompt": "implement a lock-free concurrent data structure in Rust with formal correctness arguments", "expected_tier": "premium", "task_type": "code_advanced"}
