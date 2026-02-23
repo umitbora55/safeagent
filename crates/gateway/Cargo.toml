@@ -36,3 +36,8 @@ safeagent-skills = { path = "../skills" }
 [[bin]]
 name = "eval_routing"
 path = "../../eval/eval_routing.rs"
+
+
+[dev-dependencies]
+safeagent-multi-user = { path = "../multi-user" }
+chrono = { version = "0.4", features = ["serde"] }
