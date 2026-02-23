@@ -184,6 +184,7 @@ pub struct PolicyConfig {
     pub yellow_timeout_secs: u64,
     /// Daily spend limit in microdollars ($1.00 = 1_000_000)
     pub daily_spend_limit_microdollars: Option<u64>,
+    pub monthly_spend_limit_microdollars: Option<u64>,
     pub blocked_actions: Vec<ActionType>,
 }
 
@@ -193,6 +194,7 @@ impl Default for PolicyConfig {
             action_overrides: HashMap::new(),
             yellow_timeout_secs: 30,
             daily_spend_limit_microdollars: None,
+            monthly_spend_limit_microdollars: None,
             blocked_actions: vec![],
         }
     }
@@ -208,6 +210,7 @@ pub struct PolicyEngine {
     pending: DashMap<String, PendingAction>,
     /// Microdollars spent today ($1.50 = 1_500_000)
     daily_spend_microdollars: AtomicU64,
+    monthly_spend_microdollars: AtomicU64,
     audit_log: DashMap<String, AuditEntry>,
 }
 
@@ -217,6 +220,7 @@ impl PolicyEngine {
             config: RwLock::new(config),
             pending: DashMap::new(),
             daily_spend_microdollars: AtomicU64::new(0),
+            monthly_spend_microdollars: AtomicU64::new(0),
             audit_log: DashMap::new(),
         }
     }
@@ -316,19 +320,33 @@ impl PolicyEngine {
     /// Record spend in microdollars. Returns false if limit exceeded.
     /// $1.50 = 1_500_000 microdollars
     pub fn record_spend(&self, microdollars: u64) -> bool {
-        let new_total = self.daily_spend_microdollars.fetch_add(microdollars, Ordering::Relaxed) + microdollars;
+        let new_daily = self.daily_spend_microdollars.fetch_add(microdollars, Ordering::Relaxed) + microdollars;
+        let new_monthly = self.monthly_spend_microdollars.fetch_add(microdollars, Ordering::Relaxed) + microdollars;
         let config = self.config.read().unwrap();
-        match config.daily_spend_limit_microdollars {
-            Some(limit) if new_total > limit => {
+
+        if let Some(limit) = config.daily_spend_limit_microdollars {
+            if new_daily > limit {
                 warn!(
                     "⚠️ Daily spend limit exceeded: ${:.2} / ${:.2}",
-                    new_total as f64 / 1_000_000.0,
+                    new_daily as f64 / 1_000_000.0,
                     limit as f64 / 1_000_000.0
                 );
-                false
+                return false;
             }
-            _ => true,
         }
+
+        if let Some(limit) = config.monthly_spend_limit_microdollars {
+            if new_monthly > limit {
+                warn!(
+                    "⚠️ Monthly spend limit exceeded: ${:.2} / ${:.2}",
+                    new_monthly as f64 / 1_000_000.0,
+                    limit as f64 / 1_000_000.0
+                );
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Current daily spend in microdollars
@@ -339,6 +357,41 @@ impl PolicyEngine {
     /// Reset daily spend (call at midnight)
     pub fn reset_daily_spend(&self) {
         self.daily_spend_microdollars.store(0, Ordering::Relaxed);
+    }
+
+    /// Current monthly spend in microdollars
+    pub fn monthly_spend_microdollars(&self) -> u64 {
+        self.monthly_spend_microdollars.load(Ordering::Relaxed)
+    }
+
+    /// Reset monthly spend (call at month start)
+    pub fn reset_monthly_spend(&self) {
+        self.monthly_spend_microdollars.store(0, Ordering::Relaxed);
+    }
+
+    /// Check if budget allows a request (without recording spend)
+    pub fn check_budget(&self) -> Result<(), String> {
+        let config = self.config.read().unwrap();
+        let daily = self.daily_spend_microdollars.load(Ordering::Relaxed);
+        let monthly = self.monthly_spend_microdollars.load(Ordering::Relaxed);
+
+        if let Some(limit) = config.daily_spend_limit_microdollars {
+            if daily >= limit {
+                return Err(format!(
+                    "Daily budget limit reached (${:.2} / ${:.2}). Resets at midnight UTC.",
+                    daily as f64 / 1_000_000.0, limit as f64 / 1_000_000.0
+                ));
+            }
+        }
+        if let Some(limit) = config.monthly_spend_limit_microdollars {
+            if monthly >= limit {
+                return Err(format!(
+                    "Monthly budget limit reached (${:.2} / ${:.2}). Resets next month.",
+                    monthly as f64 / 1_000_000.0, limit as f64 / 1_000_000.0
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Get audit log entries (most recent first)

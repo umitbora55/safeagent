@@ -293,6 +293,16 @@ async fn run_agent(data_dir: PathBuf) -> Result<()> {
         let dynamic_system_context =
             build_dynamic_system_context(incoming.platform, &facts_text, &tier_prompt_overlay);
 
+        // Budget check before API call
+        if let Err(budget_msg) = policy.check_budget() {
+            let msg = format!("⚠️ {}", budget_msg);
+            send_response(&incoming, &msg, &telegram_outbox_tx).await;
+            if incoming.platform == Platform::Cli {
+                println!("  {}\n", msg);
+            }
+            continue;
+        }
+
         let start = std::time::Instant::now();
         match call_anthropic(
             &http_client, &model, &api_key, &request, &dynamic_system_context,
