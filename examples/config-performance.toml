@@ -1,0 +1,18 @@
+# SafeAgent — Performance Configuration
+# Routes most requests to Sonnet/Opus for best quality.
+# Best for: code generation, deep analysis, architecture reviews.
+
+[router]
+mode = "performance"
+confidence_preset = "conservative"
+
+[cache]
+enabled = true
+
+[policy]
+daily_limit_usd = 50.0
+monthly_limit_usd = 500.0
+
+[logging]
+level = "info"
+theme = "dark"
