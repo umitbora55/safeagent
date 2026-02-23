@@ -16,3 +16,4 @@ safeagent-bridge-common = { path = "../bridges/common" }
 anyhow = { workspace = true }
 chrono = { version = "0.4", features = ["serde"] }
 tracing = { workspace = true }
+uuid = { version = "1", features = ["v4"] }
