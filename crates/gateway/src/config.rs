@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Root configuration — parsed from safeagent.toml
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
