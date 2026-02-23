@@ -4,6 +4,9 @@ pub mod file_reader;
 pub mod google_oauth;
 pub mod calendar_reader;
 pub mod email_reader;
+pub mod file_writer;
+pub mod calendar_writer;
+pub mod email_sender;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
