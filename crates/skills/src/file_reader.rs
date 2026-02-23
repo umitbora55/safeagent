@@ -1,6 +1,6 @@
 use crate::{Permission, Skill, SkillConfig, SkillResult};
 use async_trait::async_trait;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Read files from allowlisted directories only.
 pub struct FileReaderSkill {

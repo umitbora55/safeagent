@@ -1,4 +1,4 @@
-use crate::{Permission, Skill, SkillConfig, SkillResult, validate_url};
+use crate::{Permission, Skill, SkillConfig, SkillResult};
 use async_trait::async_trait;
 
 /// Web search skill using Brave Search API.
@@ -54,7 +54,7 @@ impl Skill for WebSearchSkill {
 
         let url = format!(
             "https://api.search.brave.com/res/v1/web/search?q={}&count=5",
-            urlencoding(query)
+            urlencoding_pub(query)
         );
 
         let resp = match self.client
@@ -99,7 +99,7 @@ impl Skill for WebSearchSkill {
 }
 
 /// Simple URL encoding for query parameters.
-fn urlencoding(input: &str) -> String {
+pub fn urlencoding_pub(input: &str) -> String {
     let mut encoded = String::new();
     for b in input.bytes() {
         match b {
@@ -119,9 +119,9 @@ mod tests {
 
     #[test]
     fn test_urlencoding() {
-        assert_eq!(urlencoding("hello world"), "hello%20world");
-        assert_eq!(urlencoding("rust+lang"), "rust%2Blang");
-        assert_eq!(urlencoding("test"), "test");
+        assert_eq!(urlencoding_pub("hello world"), "hello%20world");
+        assert_eq!(urlencoding_pub("rust+lang"), "rust%2Blang");
+        assert_eq!(urlencoding_pub("test"), "test");
     }
 
     #[test]
