@@ -358,6 +358,54 @@ impl MemoryStore {
         )?;
         Ok(total)
     }
+
+    /// Check if conversation is long enough to need summarization.
+    pub fn should_summarize(&self, chat_id: &ChatId, threshold: usize) -> bool {
+        let count = self.message_count_for_chat(chat_id).unwrap_or(0);
+        count > threshold
+    }
+
+    /// Get message count for a specific chat.
+    pub fn message_count_for_chat(&self, chat_id: &ChatId) -> anyhow::Result<usize> {
+        let db = self.db.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let count: i64 = db.query_row(
+            "SELECT COUNT(*) FROM messages WHERE chat_id = ?1",
+            rusqlite::params![chat_id.0],
+            |row: &rusqlite::Row| row.get(0),
+        )?;
+        Ok(count as usize)
+    }
+
+    /// Build a summarization context: oldest messages that should be compressed.
+    pub fn messages_to_summarize(&self, chat_id: &ChatId, keep_recent: usize) -> anyhow::Result<Vec<MessageEntry>> {
+        let all = self.oldest_messages(chat_id, 1000)?;
+        if all.len() <= keep_recent {
+            return Ok(vec![]);
+        }
+        let cutoff = all.len() - keep_recent;
+        Ok(all[..cutoff].to_vec())
+    }
+
+    /// Store a summary as a system message, then delete the summarized messages.
+    pub fn store_summary_and_prune(&self, chat_id: &ChatId, summary: &str, pruned_ids: &[String]) -> anyhow::Result<()> {
+        let summary_entry = MessageEntry {
+            id: MessageId(uuid::Uuid::new_v4().to_string()),
+            chat_id: chat_id.clone(),
+            sender_id: UserId("system".into()),
+            role: Role::System,
+            content: format!("[Conversation Summary]\n{}", summary),
+            platform: safeagent_bridge_common::Platform::Cli,
+            timestamp: chrono::Utc::now(),
+            token_count: None,
+        };
+        self.add_message(&summary_entry)?;
+        let db = self.db.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        for id in pruned_ids {
+            db.execute("DELETE FROM messages WHERE id = ?1", rusqlite::params![id])?;
+        }
+        Ok(())
+    }
+
 }
 
 #[cfg(test)]
