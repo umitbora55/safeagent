@@ -1,0 +1,17 @@
+{
+  "total": 24,
+  "correct": 17,
+  "quality_miss": 3,
+  "cost_miss": 4,
+  "accuracy_pct": 85.0,
+  "overspend_rate_pct": 16.666666666666664,
+  "quality_miss_rate_pct": 12.5,
+  "per_tier": {
+    "economy_total": 12,
+    "economy_correct": 9,
+    "standard_total": 6,
+    "standard_correct": 5,
+    "premium_total": 6,
+    "premium_correct": 3
+  }
+}
