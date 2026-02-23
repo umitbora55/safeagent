@@ -145,9 +145,63 @@ pub enum BridgeError {
     Shutdown,
 }
 
+#[derive(Debug, Clone)]
+pub struct BridgeCapabilities {
+    pub max_message_length: usize,
+    pub supports_threads: bool,
+    pub supports_reactions: bool,
+    pub supports_attachments: bool,
+    pub supports_typing_indicator: bool,
+}
+
+impl Default for BridgeCapabilities {
+    fn default() -> Self {
+        Self {
+            max_message_length: 4096,
+            supports_threads: false,
+            supports_reactions: false,
+            supports_attachments: false,
+            supports_typing_indicator: false,
+        }
+    }
+}
+
+/// Split a message into chunks that fit within the platform's max message length.
+/// Splits at newline boundaries when possible, falls back to character boundary.
+pub fn chunk_message(text: &str, max_len: usize) -> Vec<String> {
+    if max_len == 0 { return vec![text.to_string()]; }
+    if text.len() <= max_len { return vec![text.to_string()]; }
+
+    let mut chunks = Vec::new();
+    let mut remaining = text;
+
+    while !remaining.is_empty() {
+        if remaining.len() <= max_len {
+            chunks.push(remaining.to_string());
+            break;
+        }
+
+        // Try to split at last newline within max_len
+        let slice = &remaining[..max_len];
+        let split_at = slice.rfind('\n')
+            .map(|i| i + 1)
+            .or_else(|| slice.rfind(' ').map(|i| i + 1))
+            .unwrap_or(max_len);
+
+        chunks.push(remaining[..split_at].to_string());
+        remaining = &remaining[split_at..];
+    }
+
+    chunks
+}
+
 #[async_trait]
 pub trait Bridge: Send + Sync + 'static {
     fn platform(&self) -> Platform;
+
+    fn capabilities(&self) -> BridgeCapabilities {
+        BridgeCapabilities::default()
+    }
 
     /// Bridge'i başlat. Gelen mesajları inbox'a gönder,
     /// outbox'tan gelen yanıtları platforma ilet.
@@ -157,4 +211,65 @@ pub trait Bridge: Send + Sync + 'static {
         inbox: tokio::sync::mpsc::Sender<IncomingMessage>,
         outbox: tokio::sync::mpsc::Receiver<OutgoingMessage>,
     ) -> Result<(), BridgeError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chunk_short_message() {
+        let chunks = chunk_message("hello", 100);
+        assert_eq!(chunks, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_chunk_exact_limit() {
+        let msg = "a".repeat(100);
+        let chunks = chunk_message(&msg, 100);
+        assert_eq!(chunks.len(), 1);
+    }
+
+    #[test]
+    fn test_chunk_splits_at_newline() {
+        let msg = "line1\nline2\nline3\nline4";
+        let chunks = chunk_message(msg, 12);
+        assert!(chunks.len() >= 2);
+        for c in &chunks {
+            assert!(c.len() <= 12);
+        }
+    }
+
+    #[test]
+    fn test_chunk_splits_at_space() {
+        let msg = "word1 word2 word3 word4 word5";
+        let chunks = chunk_message(msg, 12);
+        assert!(chunks.len() >= 2);
+        for c in &chunks {
+            assert!(c.len() <= 12);
+        }
+    }
+
+    #[test]
+    fn test_chunk_no_delimiter() {
+        let msg = "a".repeat(250);
+        let chunks = chunk_message(&msg, 100);
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0].len(), 100);
+        assert_eq!(chunks[1].len(), 100);
+        assert_eq!(chunks[2].len(), 50);
+    }
+
+    #[test]
+    fn test_chunk_empty() {
+        let chunks = chunk_message("", 100);
+        assert_eq!(chunks, vec![""]);
+    }
+
+    #[test]
+    fn test_capabilities_default() {
+        let caps = BridgeCapabilities::default();
+        assert_eq!(caps.max_message_length, 4096);
+        assert!(!caps.supports_threads);
+    }
 }
