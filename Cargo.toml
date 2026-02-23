@@ -10,6 +10,7 @@ members = [
     "crates/credential-vault",
     "crates/memory",
     "crates/cost-ledger",
+    "crates/audit-log",
 ]
 
 [workspace.package]
