@@ -83,8 +83,7 @@ pub struct CredentialVault {
 impl CredentialVault {
     /// Create and initialize the vault
     pub fn new(db_path: PathBuf) -> Result<Self, VaultError> {
-        let conn = Connection::open(&db_path)
-            .map_err(|e| VaultError::Database(e.to_string()))?;
+        let conn = Connection::open(&db_path).map_err(|e| VaultError::Database(e.to_string()))?;
 
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS credentials (
@@ -99,13 +98,17 @@ impl CredentialVault {
             CREATE TABLE IF NOT EXISTS vault_meta (
                 key TEXT PRIMARY KEY,
                 value BLOB NOT NULL
-            );"
-        ).map_err(|e| VaultError::Database(e.to_string()))?;
+            );",
+        )
+        .map_err(|e| VaultError::Database(e.to_string()))?;
 
         info!("🔐 Vault initialized at {:?}", db_path);
 
         Ok(Self {
-            inner: Mutex::new(VaultInner { cipher: None, db: conn }),
+            inner: Mutex::new(VaultInner {
+                cipher: None,
+                db: conn,
+            }),
         })
     }
 
@@ -123,18 +126,13 @@ impl CredentialVault {
 
         let params = argon2::Params::new(65536, 3, 4, Some(32))
             .map_err(|e| VaultError::Encryption(e.to_string()))?;
-        let argon2 = argon2::Argon2::new(
-            argon2::Algorithm::Argon2id,
-            argon2::Version::V0x13,
-            params,
-        );
+        let argon2 =
+            argon2::Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
 
         let mut hash = vec![0u8; 32];
-        argon2.hash_password_into(
-            master_password.expose().as_bytes(),
-            &salt,
-            &mut hash,
-        ).map_err(|e| VaultError::Encryption(e.to_string()))?;
+        argon2
+            .hash_password_into(master_password.expose().as_bytes(), &salt, &mut hash)
+            .map_err(|e| VaultError::Encryption(e.to_string()))?;
 
         // Verify password by checking stored verifier (if exists)
         if let Some(stored_verifier) = get_meta(&inner.db, "password_verifier")? {
@@ -145,7 +143,8 @@ impl CredentialVault {
             let cipher = Aes256Gcm::new(cipher_key);
             let nonce = Nonce::from_slice(&verifier_nonce_bytes);
 
-            cipher.decrypt(nonce, stored_verifier.as_slice())
+            cipher
+                .decrypt(nonce, stored_verifier.as_slice())
                 .map_err(|_| VaultError::InvalidPassword)?;
 
             inner.cipher = Some(cipher);
@@ -158,7 +157,8 @@ impl CredentialVault {
             rand::thread_rng().fill_bytes(&mut nonce_bytes);
             let nonce = Nonce::from_slice(&nonce_bytes);
 
-            let verifier = cipher.encrypt(nonce, b"safeagent_vault_v1".as_slice())
+            let verifier = cipher
+                .encrypt(nonce, b"safeagent_vault_v1".as_slice())
                 .map_err(|e| VaultError::Encryption(e.to_string()))?;
 
             set_meta(&inner.db, "password_verifier", &verifier)?;
@@ -214,7 +214,8 @@ impl CredentialVault {
         let inner = self.inner.lock().unwrap();
         let cipher = inner.cipher.as_ref().ok_or(VaultError::Locked)?;
 
-        let (encrypted, nonce_bytes): (Vec<u8>, Vec<u8>) = inner.db
+        let (encrypted, nonce_bytes): (Vec<u8>, Vec<u8>) = inner
+            .db
             .query_row(
                 "SELECT encrypted_value, nonce FROM credentials WHERE key = ?1",
                 [key],
@@ -233,8 +234,8 @@ impl CredentialVault {
             .decrypt(nonce, encrypted.as_slice())
             .map_err(|_| VaultError::InvalidPassword)?;
 
-        let value = String::from_utf8(decrypted)
-            .map_err(|e| VaultError::Encryption(e.to_string()))?;
+        let value =
+            String::from_utf8(decrypted).map_err(|e| VaultError::Encryption(e.to_string()))?;
 
         Ok(SensitiveString::new(value))
     }
@@ -243,7 +244,8 @@ impl CredentialVault {
     pub fn list(&self) -> Result<Vec<CredentialMeta>, VaultError> {
         let inner = self.inner.lock().unwrap();
 
-        let mut stmt = inner.db
+        let mut stmt = inner
+            .db
             .prepare("SELECT key, label, provider, created_at, last_used FROM credentials")
             .map_err(|e| VaultError::Database(e.to_string()))?;
 
@@ -259,7 +261,9 @@ impl CredentialVault {
                         .unwrap_or_default()
                         .with_timezone(&Utc),
                     last_used: last_used_str.and_then(|s| {
-                        DateTime::parse_from_rfc3339(&s).ok().map(|d| d.with_timezone(&Utc))
+                        DateTime::parse_from_rfc3339(&s)
+                            .ok()
+                            .map(|d| d.with_timezone(&Utc))
                     }),
                 })
             })
@@ -274,7 +278,8 @@ impl CredentialVault {
     pub fn delete(&self, key: &str) -> Result<(), VaultError> {
         let inner = self.inner.lock().unwrap();
 
-        let deleted = inner.db
+        let deleted = inner
+            .db
             .execute("DELETE FROM credentials WHERE key = ?1", [key])
             .map_err(|e| VaultError::Database(e.to_string()))?;
 
@@ -289,7 +294,8 @@ impl CredentialVault {
     /// Count stored credentials
     pub fn count(&self) -> Result<usize, VaultError> {
         let inner = self.inner.lock().unwrap();
-        let count: usize = inner.db
+        let count: usize = inner
+            .db
             .query_row("SELECT COUNT(*) FROM credentials", [], |row| row.get(0))
             .map_err(|e| VaultError::Database(e.to_string()))?;
         Ok(count)
@@ -340,7 +346,8 @@ fn set_meta(db: &Connection, key: &str, value: &[u8]) -> Result<(), VaultError> 
     db.execute(
         "INSERT OR REPLACE INTO vault_meta (key, value) VALUES (?1, ?2)",
         rusqlite::params![key, value],
-    ).map_err(|e| VaultError::Database(e.to_string()))?;
+    )
+    .map_err(|e| VaultError::Database(e.to_string()))?;
     Ok(())
 }
 
@@ -391,7 +398,9 @@ mod tests {
         vault.unlock(&pwd).unwrap();
 
         let api_key = SensitiveString::new("sk-ant-abc123xyz".into());
-        vault.store("anthropic_key", "Anthropic API Key", "anthropic", &api_key).unwrap();
+        vault
+            .store("anthropic_key", "Anthropic API Key", "anthropic", &api_key)
+            .unwrap();
 
         let retrieved = vault.get("anthropic_key").unwrap();
         assert_eq!(retrieved.expose(), "sk-ant-abc123xyz");
@@ -428,13 +437,29 @@ mod tests {
         let pwd = SensitiveString::new("master123".into());
         vault.unlock(&pwd).unwrap();
 
-        vault.store("key1", "Key One", "provider_a", &SensitiveString::new("val1".into())).unwrap();
-        vault.store("key2", "Key Two", "provider_b", &SensitiveString::new("val2".into())).unwrap();
+        vault
+            .store(
+                "key1",
+                "Key One",
+                "provider_a",
+                &SensitiveString::new("val1".into()),
+            )
+            .unwrap();
+        vault
+            .store(
+                "key2",
+                "Key Two",
+                "provider_b",
+                &SensitiveString::new("val2".into()),
+            )
+            .unwrap();
 
         let list = vault.list().unwrap();
         assert_eq!(list.len(), 2);
         assert!(list.iter().any(|c| c.key == "key1" && c.label == "Key One"));
-        assert!(list.iter().any(|c| c.key == "key2" && c.provider == "provider_b"));
+        assert!(list
+            .iter()
+            .any(|c| c.key == "key2" && c.provider == "provider_b"));
     }
 
     #[test]
@@ -443,7 +468,14 @@ mod tests {
         let pwd = SensitiveString::new("master123".into());
         vault.unlock(&pwd).unwrap();
 
-        vault.store("to_delete", "Delete Me", "test", &SensitiveString::new("val".into())).unwrap();
+        vault
+            .store(
+                "to_delete",
+                "Delete Me",
+                "test",
+                &SensitiveString::new("val".into()),
+            )
+            .unwrap();
         assert_eq!(vault.count().unwrap(), 1);
 
         vault.delete("to_delete").unwrap();
@@ -466,8 +498,22 @@ mod tests {
         let pwd = SensitiveString::new("master123".into());
         vault.unlock(&pwd).unwrap();
 
-        vault.store("key", "V1", "test", &SensitiveString::new("old_value".into())).unwrap();
-        vault.store("key", "V2", "test", &SensitiveString::new("new_value".into())).unwrap();
+        vault
+            .store(
+                "key",
+                "V1",
+                "test",
+                &SensitiveString::new("old_value".into()),
+            )
+            .unwrap();
+        vault
+            .store(
+                "key",
+                "V2",
+                "test",
+                &SensitiveString::new("new_value".into()),
+            )
+            .unwrap();
 
         let val = vault.get("key").unwrap();
         assert_eq!(val.expose(), "new_value");
@@ -480,7 +526,14 @@ mod tests {
         let pwd = SensitiveString::new("master123".into());
 
         vault.unlock(&pwd).unwrap();
-        vault.store("persist", "Persist Test", "test", &SensitiveString::new("secret".into())).unwrap();
+        vault
+            .store(
+                "persist",
+                "Persist Test",
+                "test",
+                &SensitiveString::new("secret".into()),
+            )
+            .unwrap();
         vault.lock();
 
         vault.unlock(&pwd).unwrap();
@@ -508,7 +561,8 @@ mod tests {
             handles.push(std::thread::spawn(move || {
                 let key = format!("key_{}", i);
                 let val = SensitiveString::new(format!("value_{}", i));
-                v.store(&key, &format!("Label {}", i), "test", &val).unwrap();
+                v.store(&key, &format!("Label {}", i), "test", &val)
+                    .unwrap();
                 let retrieved = v.get(&key).unwrap();
                 assert_eq!(retrieved.expose(), format!("value_{}", i));
             }));

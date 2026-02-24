@@ -1,0 +1,31 @@
+id: RT-R-001
+name: 'Red Team: Audit log deletion'
+threat_ref: R-001
+category: Repudiation
+component: audit-log
+description: Verify that 'Audit log deletion' is mitigated. Attacker deletes audit entries to deny actions
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for audit-log component
+- step: 2
+  action: delete_audit_entry
+  input: remove_middle_entry
+  description: Attempt delete_audit_entry with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: sequence_gap_detected'
+assertions:
+- assertion: action_delete_audit_entry_blocked
+  expected_outcome: sequence_gap_detected
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Repudiation
+  impact: high
+  likelihood: low
+  mitigations: Hash chain integrity, Sequence gap detection

@@ -1,0 +1,31 @@
+id: RT-T-002-1
+name: 'Red Team: Shell command injection'
+threat_ref: T-002
+category: Tampering
+component: shell_executor
+description: Verify that 'Shell command injection' is mitigated. Attacker injects malicious commands via shell executor
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for shell_executor component
+- step: 2
+  action: inject_command
+  input: echo hello && rm -rf /
+  description: Attempt inject_command with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: blocked_chaining_operator'
+assertions:
+- assertion: action_inject_command_blocked
+  expected_outcome: blocked_chaining_operator
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Tampering
+  impact: critical
+  likelihood: medium
+  mitigations: Direct execve (no shell), Strict allowlist, Path resolution validation

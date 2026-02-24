@@ -49,15 +49,24 @@ pub async fn run_init(data_dir: &Path) -> Result<()> {
             let mut answer = String::new();
             io::stdin().lock().read_line(&mut answer)?;
             if answer.trim().to_lowercase() == "y" {
-                let key = prompt_and_store_key(&vault, "anthropic_key", "Anthropic API Key", "anthropic", "sk-ant-...")?;
-                key
+                prompt_and_store_key(
+                    &vault,
+                    "anthropic_key",
+                    "Anthropic API Key",
+                    "anthropic",
+                    "sk-ant-...",
+                )?
             } else {
                 existing
             }
         }
-        Err(_) => {
-            prompt_and_store_key(&vault, "anthropic_key", "Anthropic API Key", "anthropic", "sk-ant-...")?
-        }
+        Err(_) => prompt_and_store_key(
+            &vault,
+            "anthropic_key",
+            "Anthropic API Key",
+            "anthropic",
+            "sk-ant-...",
+        )?,
     };
 
     // Validate Anthropic key
@@ -100,7 +109,13 @@ pub async fn run_init(data_dir: &Path) -> Result<()> {
         Err(_) => {
             let setup_voyage = prompt_yes_no("  Add Voyage AI key? [y/N]: ")?;
             if setup_voyage {
-                prompt_and_store_key(&vault, "voyage_api_key", "Voyage AI Key", "voyage", "pa-...")?;
+                prompt_and_store_key(
+                    &vault,
+                    "voyage_api_key",
+                    "Voyage AI Key",
+                    "voyage",
+                    "pa-...",
+                )?;
                 println!("  ✅ Voyage AI key stored. Smart routing enabled.");
             } else {
                 println!("  ℹ️  Skipped. Rule-based routing will be used.");
@@ -170,7 +185,13 @@ async fn configure_telegram(vault: &CredentialVault) -> Result<()> {
     println!("  Get a token from @BotFather on Telegram: https://t.me/BotFather");
     println!();
 
-    let token = prompt_and_store_key(vault, "telegram_token", "Telegram Bot Token", "telegram", "123456:ABC...")?;
+    let token = prompt_and_store_key(
+        vault,
+        "telegram_token",
+        "Telegram Bot Token",
+        "telegram",
+        "123456:ABC...",
+    )?;
 
     // Validate token
     print!("  Validating Telegram token... ");
@@ -205,7 +226,13 @@ async fn configure_telegram(vault: &CredentialVault) -> Result<()> {
     println!("  3. Look for \"chat\":{{\"id\":XXXXXXX}}");
     println!();
 
-    let chat_id = prompt_and_store_key(vault, "telegram_chat_id", "Telegram Chat ID", "telegram", "123456789")?;
+    let chat_id = prompt_and_store_key(
+        vault,
+        "telegram_chat_id",
+        "Telegram Chat ID",
+        "telegram",
+        "123456789",
+    )?;
     let _ = chat_id; // stored in vault
 
     Ok(())
@@ -267,7 +294,10 @@ fn prompt_and_store_key(
     io::stdin().lock().read_line(&mut input)?;
     let input = input.trim();
     if input.is_empty() {
-        anyhow::bail!("SA-E006: {} cannot be empty.\n  Fix: Run `safeagent init` again.", label);
+        anyhow::bail!(
+            "SA-E006: {} cannot be empty.\n  Fix: Run `safeagent init` again.",
+            label
+        );
     }
     let val = SensitiveString::new(input.to_string());
     vault.store(key, label, provider, &val)?;

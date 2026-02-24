@@ -1,0 +1,31 @@
+id: RT-D-003
+name: 'Red Team: Policy engine resource exhaustion'
+threat_ref: D-003
+category: Denial of Service
+component: policy-engine
+description: Verify that 'Policy engine resource exhaustion' is mitigated. Complex policies cause evaluation timeout
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for policy-engine component
+- step: 2
+  action: complex_policy
+  input: deeply_nested_conditions
+  description: Attempt complex_policy with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: evaluation_bounded'
+assertions:
+- assertion: action_complex_policy_blocked
+  expected_outcome: evaluation_bounded
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Denial of Service
+  impact: medium
+  likelihood: low
+  mitigations: Evaluation timeout, Rule complexity limits

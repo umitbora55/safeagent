@@ -64,20 +64,18 @@ async fn api_health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 
 async fn api_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let stats = match &state.ledger {
-        Some(ledger) => {
-            match ledger.total_summary() {
-                Ok(s) => serde_json::json!({
-                    "total_requests": s.total_requests,
-                    "total_input_tokens": s.total_input_tokens,
-                    "total_output_tokens": s.total_output_tokens,
-                    "total_cost_usd": format!("{:.4}", s.total_cost_microdollars as f64 / 1_000_000.0),
-                    "total_cost_microdollars": s.total_cost_microdollars,
-                    "cache_read_tokens": s.total_cache_read_tokens,
-                    "cache_write_tokens": s.total_cache_write_tokens,
-                }),
-                Err(e) => serde_json::json!({"error": format!("{}", e)}),
-            }
-        }
+        Some(ledger) => match ledger.total_summary() {
+            Ok(s) => serde_json::json!({
+                "total_requests": s.total_requests,
+                "total_input_tokens": s.total_input_tokens,
+                "total_output_tokens": s.total_output_tokens,
+                "total_cost_usd": format!("{:.4}", s.total_cost_microdollars as f64 / 1_000_000.0),
+                "total_cost_microdollars": s.total_cost_microdollars,
+                "cache_read_tokens": s.total_cache_read_tokens,
+                "cache_write_tokens": s.total_cache_write_tokens,
+            }),
+            Err(e) => serde_json::json!({"error": format!("{}", e)}),
+        },
         None => serde_json::json!({"error": "Cost ledger not available"}),
     };
 
@@ -107,9 +105,10 @@ async fn api_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 
 async fn api_audit(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let entries = match &state.audit {
-        Some(audit) => {
-            match audit.recent_entries(50) {
-                Ok(entries) => entries.iter().map(|e| {
+        Some(audit) => match audit.recent_entries(50) {
+            Ok(entries) => entries
+                .iter()
+                .map(|e| {
                     serde_json::json!({
                         "timestamp": e.timestamp.to_rfc3339(),
                         "event_type": e.event_type,
@@ -123,10 +122,10 @@ async fn api_audit(State(state): State<Arc<AppState>>) -> impl IntoResponse {
                         "success": e.success,
                         "error": e.error_message,
                     })
-                }).collect::<Vec<_>>(),
-                Err(_) => vec![],
-            }
-        }
+                })
+                .collect::<Vec<_>>(),
+            Err(_) => vec![],
+        },
         None => vec![],
     };
 
@@ -138,13 +137,16 @@ async fn api_conversations(State(state): State<Arc<AppState>>) -> impl IntoRespo
         Some(mem) => {
             let chat_id = safeagent_bridge_common::ChatId("cli_main".into());
             match mem.recent_messages(&chat_id, 50) {
-                Ok(msgs) => msgs.iter().map(|m| {
-                    serde_json::json!({
-                        "role": m.role.as_str(),
-                        "content": m.content,
-                        "timestamp": m.timestamp.to_rfc3339(),
+                Ok(msgs) => msgs
+                    .iter()
+                    .map(|m| {
+                        serde_json::json!({
+                            "role": m.role.as_str(),
+                            "content": m.content,
+                            "timestamp": m.timestamp.to_rfc3339(),
+                        })
                     })
-                }).collect::<Vec<_>>(),
+                    .collect::<Vec<_>>(),
                 Err(_) => vec![],
             }
         }
@@ -183,9 +185,12 @@ pub struct WebhookMessage {
     pub api_key: Option<String>,
 }
 
-fn default_webhook_user() -> String { "webhook_user".into() }
+fn default_webhook_user() -> String {
+    "webhook_user".into()
+}
 
 #[derive(Debug, serde::Serialize)]
+#[allow(dead_code)]
 struct WebhookResponse {
     status: String,
     message_id: String,
@@ -206,22 +211,20 @@ async fn api_webhook_message(
     let msg_id = uuid::Uuid::new_v4().to_string();
 
     match &state.webhook_tx {
-        Some(tx) => {
-            match tx.send(payload).await {
-                Ok(_) => (
-                    axum::http::StatusCode::ACCEPTED,
-                    Json(serde_json::json!({
-                        "status": "queued",
-                        "message_id": msg_id,
-                        "queued": true,
-                    })),
-                ),
-                Err(_) => (
-                    axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                    Json(serde_json::json!({"error": "Message queue full"})),
-                ),
-            }
-        }
+        Some(tx) => match tx.send(payload).await {
+            Ok(_) => (
+                axum::http::StatusCode::ACCEPTED,
+                Json(serde_json::json!({
+                    "status": "queued",
+                    "message_id": msg_id,
+                    "queued": true,
+                })),
+            ),
+            Err(_) => (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({"error": "Message queue full"})),
+            ),
+        },
         None => (
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
             Json(serde_json::json!({"error": "Webhook processing not enabled"})),
@@ -229,9 +232,7 @@ async fn api_webhook_message(
     }
 }
 
-async fn api_webhook_health(
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+async fn api_webhook_health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let uptime = chrono::Utc::now() - state.start_time;
     Json(serde_json::json!({
         "status": "ok",
@@ -244,7 +245,8 @@ async fn api_webhook_health(
 // ─── Dashboard HTML ─────────────────────────────────────
 
 async fn dashboard_page(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    Html(format!(r##"<!DOCTYPE html>
+    Html(format!(
+        r##"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -415,5 +417,7 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> impl IntoResponse
         setInterval(refreshAll, 15000);
     </script>
 </body>
-</html>"##, version = state.version))
+</html>"##,
+        version = state.version
+    ))
 }

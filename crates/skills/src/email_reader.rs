@@ -1,5 +1,5 @@
+use crate::google_oauth::{get_valid_token, OAuthTokens};
 use crate::{Permission, Skill, SkillConfig, SkillResult};
-use crate::google_oauth::{OAuthTokens, get_valid_token};
 use async_trait::async_trait;
 
 /// Read emails from Gmail (read-only).
@@ -57,12 +57,18 @@ impl EmailReaderSkill {
 
 #[async_trait]
 impl Skill for EmailReaderSkill {
-    fn id(&self) -> &str { "email_reader" }
-    fn name(&self) -> &str { "Gmail Reader" }
+    fn id(&self) -> &str {
+        "email_reader"
+    }
+    fn name(&self) -> &str {
+        "Gmail Reader"
+    }
     fn description(&self) -> &str {
         "Read emails from Gmail. Input: 'inbox', 'unread', a search query like 'from:boss@company.com', or 'latest 5'. Returns: email subjects, senders, dates, and snippets."
     }
-    fn permissions(&self) -> Vec<Permission> { vec![Permission::read_email()] }
+    fn permissions(&self) -> Vec<Permission> {
+        vec![Permission::read_email()]
+    }
 
     async fn execute(&self, input: &str) -> SkillResult {
         if !self.config.enabled {
@@ -71,7 +77,10 @@ impl Skill for EmailReaderSkill {
 
         let query = input.trim();
         if query.is_empty() {
-            return SkillResult::err("Empty query. Try: 'inbox', 'unread', 'from:someone@email.com', or 'latest 5'.".into());
+            return SkillResult::err(
+                "Empty query. Try: 'inbox', 'unread', 'from:someone@email.com', or 'latest 5'."
+                    .into(),
+            );
         }
 
         let access_token = match self.get_access_token().await {
@@ -89,7 +98,8 @@ impl Skill for EmailReaderSkill {
             max_results
         );
 
-        let list_resp = match self.client
+        let list_resp = match self
+            .client
             .get(&list_url)
             .header("Authorization", format!("Bearer {}", access_token))
             .send()
@@ -112,16 +122,12 @@ impl Skill for EmailReaderSkill {
 
         let messages = list_data["messages"].as_array();
         let msg_ids: Vec<&str> = match messages {
-            Some(msgs) => msgs.iter()
-                .filter_map(|m| m["id"].as_str())
-                .collect(),
-            None => return SkillResult::ok("No emails found.".into())
-                .with_meta("query", query),
+            Some(msgs) => msgs.iter().filter_map(|m| m["id"].as_str()).collect(),
+            None => return SkillResult::ok("No emails found.".into()).with_meta("query", query),
         };
 
         if msg_ids.is_empty() {
-            return SkillResult::ok("No emails found.".into())
-                .with_meta("query", query);
+            return SkillResult::ok("No emails found.".into()).with_meta("query", query);
         }
 
         // Fetch each message metadata
@@ -133,7 +139,8 @@ impl Skill for EmailReaderSkill {
                 msg_id
             );
 
-            let msg_resp = match self.client
+            let msg_resp = match self
+                .client
                 .get(&msg_url)
                 .header("Authorization", format!("Bearer {}", access_token))
                 .send()
@@ -143,7 +150,9 @@ impl Skill for EmailReaderSkill {
                 Err(_) => continue,
             };
 
-            if !msg_resp.status().is_success() { continue; }
+            if !msg_resp.status().is_success() {
+                continue;
+            }
 
             let msg_data: serde_json::Value = match msg_resp.json().await {
                 Ok(d) => d,
@@ -169,8 +178,14 @@ impl Skill for EmailReaderSkill {
             }
 
             let snippet = msg_data["snippet"].as_str().unwrap_or("");
-            let labels = msg_data["labelIds"].as_array()
-                .map(|l| l.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
+            let labels = msg_data["labelIds"]
+                .as_array()
+                .map(|l| {
+                    l.iter()
+                        .filter_map(|v| v.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
                 .unwrap_or_default();
 
             let unread = labels.contains("UNREAD");
@@ -178,7 +193,12 @@ impl Skill for EmailReaderSkill {
 
             output.push_str(&format!(
                 "{}{}. {}\n   From: {}\n   Date: {}\n   {}\n\n",
-                unread_marker, i + 1, subject, from, date, snippet
+                unread_marker,
+                i + 1,
+                subject,
+                from,
+                date,
+                snippet
             ));
         }
 
@@ -272,7 +292,10 @@ mod tests {
 
     #[test]
     fn test_disabled() {
-        let config = SkillConfig { enabled: false, ..Default::default() };
+        let config = SkillConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let skill = EmailReaderSkill::new("id".into(), "secret".into(), None).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("inbox"));

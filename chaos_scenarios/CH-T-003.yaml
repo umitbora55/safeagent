@@ -1,0 +1,21 @@
+id: CH-T-003
+name: 'Chaos: policy-engine under policy_engine_timeout'
+threat_ref: T-003
+category: Tampering
+component: policy-engine
+description: 'Test policy-engine resilience when policy_engine_timeout occurs. Related threat: Policy bypass via malformed input'
+fault_injection:
+  fault_type: policy_engine_timeout
+  target: policy-engine
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: deny_on_timeout
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Tampering
+  impact: high
+  likelihood: low

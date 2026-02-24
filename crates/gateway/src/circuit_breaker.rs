@@ -1,12 +1,14 @@
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+#![allow(dead_code)]
+
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CircuitState {
-    Closed,    // Normal — requests pass through
-    Open,      // Failing — requests blocked
-    HalfOpen,  // Testing — one request allowed
+    Closed,   // Normal — requests pass through
+    Open,     // Failing — requests blocked
+    HalfOpen, // Testing — one request allowed
 }
 
 /// Circuit breaker for provider resilience.
@@ -83,7 +85,10 @@ impl CircuitBreaker {
         *self.last_failure.lock().unwrap() = Some(Instant::now());
 
         if count == self.failure_threshold {
-            tracing::warn!("🔌 Circuit breaker: OPEN (threshold {} reached)", self.failure_threshold);
+            tracing::warn!(
+                "🔌 Circuit breaker: OPEN (threshold {} reached)",
+                self.failure_threshold
+            );
         }
     }
 

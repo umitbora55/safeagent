@@ -138,7 +138,11 @@ pub struct QueryFeatures {
 }
 
 pub fn extract_features(request: &LlmRequest) -> QueryFeatures {
-    let msg = request.messages.last().map(|m| m.content.as_str()).unwrap_or("");
+    let msg = request
+        .messages
+        .last()
+        .map(|m| m.content.as_str())
+        .unwrap_or("");
     let lower = msg.to_lowercase();
     let word_count = msg.split_whitespace().count();
 
@@ -162,10 +166,14 @@ pub fn extract_features(request: &LlmRequest) -> QueryFeatures {
     };
 
     // Signal 2: Code presence
-    if has_code { score += 2; }
+    if has_code {
+        score += 2;
+    }
 
     // Signal 3: Math/logic presence
-    if has_math { score += 2; }
+    if has_math {
+        score += 2;
+    }
 
     // Signal 4: Constraint count (multi-step instructions)
     score += match constraint_count {
@@ -189,7 +197,9 @@ pub fn extract_features(request: &LlmRequest) -> QueryFeatures {
     };
 
     // Signal 7: System prompt complexity
-    if system_prompt_length > 1000 { score += 1; }
+    if system_prompt_length > 1000 {
+        score += 1;
+    }
 
     // Signal 8: Vision/tools
     if request.requires_vision || request.requires_tools {
@@ -216,8 +226,10 @@ pub fn features_to_complexity(features: &QueryFeatures) -> TaskComplexity {
     if features.word_count <= 3
         && !features.has_code
         && !features.has_math
-        && matches!(features.task_type,
-            TaskType::SimpleQA | TaskType::Conversation | TaskType::Unknown)
+        && matches!(
+            features.task_type,
+            TaskType::SimpleQA | TaskType::Conversation | TaskType::Unknown
+        )
     {
         return TaskComplexity::Simple;
     }
@@ -242,7 +254,12 @@ pub fn assess_complexity(request: &LlmRequest) -> TaskComplexity {
 fn classify_task(lower: &str, original: &str) -> TaskType {
     // Code detection is high priority
     if detect_code(original) {
-        if has_any(lower, &["review", "incele", "kontrol", "fix", "düzelt", "bug", "hata"]) {
+        if has_any(
+            lower,
+            &[
+                "review", "incele", "kontrol", "fix", "düzelt", "bug", "hata",
+            ],
+        ) {
             return TaskType::CodeReview;
         }
         return TaskType::CodeGeneration;
@@ -250,80 +267,163 @@ fn classify_task(lower: &str, original: &str) -> TaskType {
 
     // Deep reasoning signals (Opus territory)
     // "prove", "derive" gibi kelimeler tek başına yeterli — constraint şartı kaldırıldı
-    if has_any(lower, &[
-        "prove", "kanıtla", "derive", "türet",
-        "why does", "neden böyle", "explain why",
-        "trade-off", "tradeoff",
-        "what would happen if", "ne olurdu",
-        "undecidable", "karar verilemez",
-        "diagonaliz", "induction", "tümevarım",
-    ]) {
+    if has_any(
+        lower,
+        &[
+            "prove",
+            "kanıtla",
+            "derive",
+            "türet",
+            "why does",
+            "neden böyle",
+            "explain why",
+            "trade-off",
+            "tradeoff",
+            "what would happen if",
+            "ne olurdu",
+            "undecidable",
+            "karar verilemez",
+            "diagonaliz",
+            "induction",
+            "tümevarım",
+        ],
+    ) {
         return TaskType::DeepReasoning;
     }
 
     // Architecture / design — expanded to catch complex system design
-    if has_any(lower, &[
-        "architect", "mimari", "design system", "sistem tasarla",
-        "infrastructure", "altyapı", "scalab", "ölçeklen",
-        "distributed", "dağıtık", "multi-tenant", "multi-region",
-        "cache invalidation", "data centers", "replication",
-        "consensus algorithm", "raft", "paxos",
-        "zero-downtime", "failover", "load balanc",
-        "microservice", "event-driven", "event sourcing",
-        "end-to-end encrypt", "forward secrecy",
-        "real-time", "low latency", "microsecond",
-        "auto-scal", "canary deploy", "chaos engineer",
-        "active-active", "read-write split",
-        "collaborative editing", "conflict resolution",
-        "cdn", "content delivery",
-        "streaming pipeline", "exactly-once",
-        "api gateway",
-    ]) {
+    if has_any(
+        lower,
+        &[
+            "architect",
+            "mimari",
+            "design system",
+            "sistem tasarla",
+            "infrastructure",
+            "altyapı",
+            "scalab",
+            "ölçeklen",
+            "distributed",
+            "dağıtık",
+            "multi-tenant",
+            "multi-region",
+            "cache invalidation",
+            "data centers",
+            "replication",
+            "consensus algorithm",
+            "raft",
+            "paxos",
+            "zero-downtime",
+            "failover",
+            "load balanc",
+            "microservice",
+            "event-driven",
+            "event sourcing",
+            "end-to-end encrypt",
+            "forward secrecy",
+            "real-time",
+            "low latency",
+            "microsecond",
+            "auto-scal",
+            "canary deploy",
+            "chaos engineer",
+            "active-active",
+            "read-write split",
+            "collaborative editing",
+            "conflict resolution",
+            "cdn",
+            "content delivery",
+            "streaming pipeline",
+            "exactly-once",
+            "api gateway",
+        ],
+    ) {
         return TaskType::Architecture;
     }
     // Complex implementation — compiler, allocator, interpreter, optimizer
-    if has_any(lower, &[
-        "compiler", "lexer", "parser", "ast",
-        "bytecode", "interpreter",
-        "memory allocator", "custom allocator", "lock-free",
-        "concurrent data structure",
-        "query optimizer", "execution plan",
-        "b-tree", "mvcc", "btree",
-        "neural network", "automatic differentiation", "backpropagation",
-        "garbage collect", "formal verification",
-        "trading system",
-        "tracing system", "distributed trac",
-        "connection pool",
-    ]) {
+    if has_any(
+        lower,
+        &[
+            "compiler",
+            "lexer",
+            "parser",
+            "ast",
+            "bytecode",
+            "interpreter",
+            "memory allocator",
+            "custom allocator",
+            "lock-free",
+            "concurrent data structure",
+            "query optimizer",
+            "execution plan",
+            "b-tree",
+            "mvcc",
+            "btree",
+            "neural network",
+            "automatic differentiation",
+            "backpropagation",
+            "garbage collect",
+            "formal verification",
+            "trading system",
+            "tracing system",
+            "distributed trac",
+            "connection pool",
+        ],
+    ) {
         return TaskType::DeepReasoning;
     }
 
     // Scientific
-    if has_any(lower, &[
-        "scientific", "bilimsel", "hypothesis", "hipotez",
-        "experiment", "deney", "peer review", "literature",
-    ]) {
+    if has_any(
+        lower,
+        &[
+            "scientific",
+            "bilimsel",
+            "hypothesis",
+            "hipotez",
+            "experiment",
+            "deney",
+            "peer review",
+            "literature",
+        ],
+    ) {
         return TaskType::ScientificAnalysis;
     }
 
     // Multi-step analysis
-    if has_any(lower, &[
-        "analyze", "analiz", "compare", "karşılaştır",
-        "evaluate", "değerlendir", "assess", "research", "araştır",
-    ]) {
+    if has_any(
+        lower,
+        &[
+            "analyze",
+            "analiz",
+            "compare",
+            "karşılaştır",
+            "evaluate",
+            "değerlendir",
+            "assess",
+            "research",
+            "araştır",
+        ],
+    ) {
         return TaskType::MultiStepAnalysis;
     }
 
     // Content creation
-    if has_any(lower, &[
-        "write", "yaz", "create", "oluştur", "draft", "taslak",
-        "compose", "blog", "article", "makale", "essay",
-    ]) {
+    if has_any(
+        lower,
+        &[
+            "write", "yaz", "create", "oluştur", "draft", "taslak", "compose", "blog", "article",
+            "makale", "essay",
+        ],
+    ) {
         return TaskType::ContentCreation;
     }
 
     // Summarization
-    if has_any(lower, &["summarize", "özetle", "summary", "özet", "tl;dr", "kısaca"]) {
+    if has_any(
+        lower,
+        &["summarize", "özetle", "summary", "özet", "tl;dr", "kısaca"],
+    ) {
         return TaskType::Summarization;
     }
 
@@ -333,11 +433,21 @@ fn classify_task(lower: &str, original: &str) -> TaskType {
     }
 
     // Classification / extraction
-    if has_any(lower, &[
-        "classify", "sınıfla", "categorize", "kategori",
-        "extract", "çıkar", "parse", "ayrıştır",
-        "list all", "listele",
-    ]) {
+    if has_any(
+        lower,
+        &[
+            "classify",
+            "sınıfla",
+            "categorize",
+            "kategori",
+            "extract",
+            "çıkar",
+            "parse",
+            "ayrıştır",
+            "list all",
+            "listele",
+        ],
+    ) {
         return TaskType::Extraction;
     }
 
@@ -429,20 +539,38 @@ fn count_constraints(text: &str) -> usize {
     }
 
     // Bullet points
-    count += text.lines().filter(|l| {
-        let t = l.trim();
-        t.starts_with("- ") || t.starts_with("* ") || t.starts_with("• ")
-    }).count();
+    count += text
+        .lines()
+        .filter(|l| {
+            let t = l.trim();
+            t.starts_with("- ") || t.starts_with("* ") || t.starts_with("• ")
+        })
+        .count();
 
     // Imperative verbs (task indicators)
     let lower = text.to_lowercase();
     let imperatives = [
-        "must", "should", "need to", "make sure", "ensure",
-        "first", "then", "finally", "also", "additionally",
-        "olmalı", "gerekiyor", "emin ol", "ayrıca", "önce", "sonra",
+        "must",
+        "should",
+        "need to",
+        "make sure",
+        "ensure",
+        "first",
+        "then",
+        "finally",
+        "also",
+        "additionally",
+        "olmalı",
+        "gerekiyor",
+        "emin ol",
+        "ayrıca",
+        "önce",
+        "sonra",
     ];
     for imp in imperatives {
-        if lower.contains(imp) { count += 1; }
+        if lower.contains(imp) {
+            count += 1;
+        }
     }
 
     count
@@ -513,7 +641,10 @@ impl LlmRequest {
     pub fn simple(system: &str, user_msg: &str) -> Self {
         Self {
             system_prompt: system.into(),
-            messages: vec![LlmMessage { role: "user".into(), content: user_msg.into() }],
+            messages: vec![LlmMessage {
+                role: "user".into(),
+                content: user_msg.into(),
+            }],
             max_tokens: None,
             temperature: None,
             force_model: None,
@@ -568,9 +699,12 @@ pub struct UsageStats {
 impl UsageStats {
     pub fn record(&self, input_tokens: u32, output_tokens: u32, cost_microdollars: u64) {
         self.total_requests.fetch_add(1, Ordering::Relaxed);
-        self.total_input_tokens.fetch_add(input_tokens as u64, Ordering::Relaxed);
-        self.total_output_tokens.fetch_add(output_tokens as u64, Ordering::Relaxed);
-        self.total_cost_microdollars.fetch_add(cost_microdollars, Ordering::Relaxed);
+        self.total_input_tokens
+            .fetch_add(input_tokens as u64, Ordering::Relaxed);
+        self.total_output_tokens
+            .fetch_add(output_tokens as u64, Ordering::Relaxed);
+        self.total_cost_microdollars
+            .fetch_add(cost_microdollars, Ordering::Relaxed);
     }
 
     pub fn snapshot(&self) -> UsageSnapshot {
@@ -623,7 +757,8 @@ impl Default for ModelHealth {
 impl ModelHealth {
     pub fn record_success(&self, latency_ms: u64) {
         self.success_count.fetch_add(1, Ordering::Relaxed);
-        self.total_latency_ms.fetch_add(latency_ms, Ordering::Relaxed);
+        self.total_latency_ms
+            .fetch_add(latency_ms, Ordering::Relaxed);
     }
 
     pub fn record_error(&self) {
@@ -641,7 +776,9 @@ impl ModelHealth {
 
     pub fn avg_latency_ms(&self) -> u64 {
         let s = self.success_count.load(Ordering::Relaxed);
-        if s == 0 { return 0; }
+        if s == 0 {
+            return 0;
+        }
         self.total_latency_ms.load(Ordering::Relaxed) / s
     }
 }
@@ -659,7 +796,11 @@ pub struct RetryConfig {
 
 impl Default for RetryConfig {
     fn default() -> Self {
-        Self { max_retries: 2, fallback_tier: None, retry_delay_ms: 1000 }
+        Self {
+            max_retries: 2,
+            fallback_tier: None,
+            retry_delay_ms: 1000,
+        }
     }
 }
 
@@ -722,7 +863,12 @@ impl LlmRouter {
                             .iter()
                             .filter(|m| m.tier == emb_tier)
                             .filter(|m| !request.requires_vision || m.supports_vision)
-                            .filter(|m| self.health.get(&m.id).map(|h| h.is_healthy()).unwrap_or(true))
+                            .filter(|m| {
+                                self.health
+                                    .get(&m.id)
+                                    .map(|h| h.is_healthy())
+                                    .unwrap_or(true)
+                            })
                             .min_by_key(|m| m.cost_per_1k_input_microdollars)
                             .cloned();
                     }
@@ -753,7 +899,12 @@ impl LlmRouter {
             .filter(|m| m.tier == target_tier)
             .filter(|m| !request.requires_vision || m.supports_vision)
             .filter(|m| !request.requires_tools || m.supports_tools)
-            .filter(|m| self.health.get(&m.id).map(|h| h.is_healthy()).unwrap_or(true))
+            .filter(|m| {
+                self.health
+                    .get(&m.id)
+                    .map(|h| h.is_healthy())
+                    .unwrap_or(true)
+            })
             .min_by_key(|m| m.cost_per_1k_input_microdollars)
             .cloned()
             .or_else(|| {
@@ -762,7 +913,12 @@ impl LlmRouter {
                     .iter()
                     .filter(|m| !request.requires_vision || m.supports_vision)
                     .filter(|m| !request.requires_tools || m.supports_tools)
-                    .filter(|m| self.health.get(&m.id).map(|h| h.is_healthy()).unwrap_or(true))
+                    .filter(|m| {
+                        self.health
+                            .get(&m.id)
+                            .map(|h| h.is_healthy())
+                            .unwrap_or(true)
+                    })
                     .min_by_key(|m| m.cost_per_1k_input_microdollars)
                     .cloned()
             })
@@ -770,24 +926,33 @@ impl LlmRouter {
 
     /// Ceiling division cost calculation
     pub fn calculate_cost(model: &ModelConfig, input_tokens: u32, output_tokens: u32) -> u64 {
-        let input_cost = (input_tokens as u64 * model.cost_per_1k_input_microdollars + 999) / 1000;
-        let output_cost = (output_tokens as u64 * model.cost_per_1k_output_microdollars + 999) / 1000;
+        let input_cost =
+            (input_tokens as u64 * model.cost_per_1k_input_microdollars).div_ceil(1000);
+        let output_cost =
+            (output_tokens as u64 * model.cost_per_1k_output_microdollars).div_ceil(1000);
         input_cost + output_cost
     }
 
     pub fn record_usage(&self, input_tokens: u32, output_tokens: u32, cost_microdollars: u64) {
-        self.stats.record(input_tokens, output_tokens, cost_microdollars);
+        self.stats
+            .record(input_tokens, output_tokens, cost_microdollars);
     }
 
     pub fn record_model_success(&self, model_id: &str, latency_ms: u64) {
-        if let Some(h) = self.health.get(model_id) { h.record_success(latency_ms); }
+        if let Some(h) = self.health.get(model_id) {
+            h.record_success(latency_ms);
+        }
     }
 
     pub fn record_model_error(&self, model_id: &str) {
-        if let Some(h) = self.health.get(model_id) { h.record_error(); }
+        if let Some(h) = self.health.get(model_id) {
+            h.record_error();
+        }
     }
 
-    pub fn usage_snapshot(&self) -> UsageSnapshot { self.stats.snapshot() }
+    pub fn usage_snapshot(&self) -> UsageSnapshot {
+        self.stats.snapshot()
+    }
 
     pub fn set_mode(&self, mode: RoutingMode) {
         *self.mode.write().unwrap() = mode;
@@ -841,7 +1006,10 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
-pub fn embedding_to_scores(embedding: &[f32], centroids: &(Vec<f32>, Vec<f32>, Vec<f32>)) -> EmbeddingScores {
+pub fn embedding_to_scores(
+    embedding: &[f32],
+    centroids: &(Vec<f32>, Vec<f32>, Vec<f32>),
+) -> EmbeddingScores {
     EmbeddingScores {
         economy: cosine_similarity(embedding, &centroids.0),
         standard: cosine_similarity(embedding, &centroids.1),
@@ -856,37 +1024,47 @@ mod tests {
     fn test_models() -> Vec<ModelConfig> {
         vec![
             ModelConfig {
-                id: "haiku".into(), provider: Provider::Anthropic,
+                id: "haiku".into(),
+                provider: Provider::Anthropic,
                 model_name: "claude-haiku-4-5-20251001".into(),
-                api_key_ref: "key".into(), api_base_url: None,
+                api_key_ref: "key".into(),
+                api_base_url: None,
                 tier: ModelTier::Economy,
                 cost_per_1k_input_microdollars: 800,
                 cost_per_1k_output_microdollars: 3200,
                 max_context_tokens: 200_000,
-                supports_vision: true, supports_tools: true,
+                supports_vision: true,
+                supports_tools: true,
             },
             ModelConfig {
-                id: "sonnet".into(), provider: Provider::Anthropic,
+                id: "sonnet".into(),
+                provider: Provider::Anthropic,
                 model_name: "claude-sonnet-4-5-20250929".into(),
-                api_key_ref: "key".into(), api_base_url: None,
+                api_key_ref: "key".into(),
+                api_base_url: None,
                 tier: ModelTier::Standard,
                 cost_per_1k_input_microdollars: 3000,
                 cost_per_1k_output_microdollars: 15000,
                 max_context_tokens: 200_000,
-                supports_vision: true, supports_tools: true,
+                supports_vision: true,
+                supports_tools: true,
             },
             ModelConfig {
-                id: "opus".into(), provider: Provider::Anthropic,
+                id: "opus".into(),
+                provider: Provider::Anthropic,
                 model_name: "claude-opus-4-6".into(),
-                api_key_ref: "key".into(), api_base_url: None,
+                api_key_ref: "key".into(),
+                api_base_url: None,
                 tier: ModelTier::Premium,
                 cost_per_1k_input_microdollars: 15000,
                 cost_per_1k_output_microdollars: 75000,
                 max_context_tokens: 200_000,
-                supports_vision: true, supports_tools: true,
+                supports_vision: true,
+                supports_tools: true,
             },
             ModelConfig {
-                id: "deepseek".into(), provider: Provider::DeepSeek,
+                id: "deepseek".into(),
+                provider: Provider::DeepSeek,
                 model_name: "deepseek-chat".into(),
                 api_key_ref: "key".into(),
                 api_base_url: Some("https://api.deepseek.com".into()),
@@ -894,12 +1072,15 @@ mod tests {
                 cost_per_1k_input_microdollars: 140,
                 cost_per_1k_output_microdollars: 280,
                 max_context_tokens: 64_000,
-                supports_vision: false, supports_tools: false,
+                supports_vision: false,
+                supports_tools: false,
             },
         ]
     }
 
-    fn req(msg: &str) -> LlmRequest { LlmRequest::simple("You are helpful.", msg) }
+    fn req(msg: &str) -> LlmRequest {
+        LlmRequest::simple("You are helpful.", msg)
+    }
 
     // ─── Short-circuit tests ────────────────────────────
 
@@ -907,7 +1088,11 @@ mod tests {
     fn test_selam_goes_to_haiku() {
         let router = LlmRouter::new(test_models(), RoutingMode::Balanced);
         let model = router.select_model(&req("Selam")).unwrap();
-        assert_eq!(model.tier, ModelTier::Economy, "Short greeting should go to Haiku");
+        assert_eq!(
+            model.tier,
+            ModelTier::Economy,
+            "Short greeting should go to Haiku"
+        );
     }
 
     #[test]
@@ -929,33 +1114,41 @@ mod tests {
     #[test]
     fn test_simple_question_haiku() {
         let router = LlmRouter::new(test_models(), RoutingMode::Balanced);
-        let model = router.select_model(&req("Türkiye'nin başkenti neresi?")).unwrap();
+        let model = router
+            .select_model(&req("Türkiye'nin başkenti neresi?"))
+            .unwrap();
         assert_eq!(model.tier, ModelTier::Economy);
     }
 
     #[test]
     fn test_code_gen_sonnet() {
         let router = LlmRouter::new(test_models(), RoutingMode::Balanced);
-        let model = router.select_model(&req("Write a function to sort a linked list")).unwrap();
+        let model = router
+            .select_model(&req("Write a function to sort a linked list"))
+            .unwrap();
         assert_eq!(model.tier, ModelTier::Standard);
     }
 
     #[test]
     fn test_analysis_opus() {
         let router = LlmRouter::new(test_models(), RoutingMode::Balanced);
-        let model = router.select_model(&req(
-            "Analyze the architectural tradeoffs between microservices and monolith, \
-             then compare their scalability characteristics with concrete examples"
-        )).unwrap();
+        let model = router
+            .select_model(&req(
+                "Analyze the architectural tradeoffs between microservices and monolith, \
+             then compare their scalability characteristics with concrete examples",
+            ))
+            .unwrap();
         assert_eq!(model.tier, ModelTier::Premium);
     }
 
     #[test]
     fn test_deep_reasoning_opus() {
         let router = LlmRouter::new(test_models(), RoutingMode::Balanced);
-        let model = router.select_model(&req(
-            "Prove that the halting problem is undecidable using a diagonalization argument"
-        )).unwrap();
+        let model = router
+            .select_model(&req(
+                "Prove that the halting problem is undecidable using a diagonalization argument",
+            ))
+            .unwrap();
         assert_eq!(model.tier, ModelTier::Premium);
     }
 
@@ -971,13 +1164,19 @@ mod tests {
     #[test]
     fn test_classify_conversation() {
         assert_eq!(classify_task("selam", "Selam"), TaskType::Conversation);
-        assert_eq!(classify_task("merhaba nasılsın", "Merhaba nasılsın"), TaskType::Conversation);
+        assert_eq!(
+            classify_task("merhaba nasılsın", "Merhaba nasılsın"),
+            TaskType::Conversation
+        );
     }
 
     #[test]
     fn test_classify_code() {
         assert_eq!(
-            classify_task("write a function to sort", "Write a function to sort\n```python\ndef sort_list(lst):\n```"),
+            classify_task(
+                "write a function to sort",
+                "Write a function to sort\n```python\ndef sort_list(lst):\n```"
+            ),
             TaskType::CodeGeneration
         );
         // "write a function" without code markers → ContentCreation (correct behavior)
@@ -1032,7 +1231,9 @@ mod tests {
     #[test]
     fn test_economy_mode_always_cheap() {
         let router = LlmRouter::new(test_models(), RoutingMode::Economy);
-        let model = router.select_model(&req("Analyze quantum computing deeply")).unwrap();
+        let model = router
+            .select_model(&req("Analyze quantum computing deeply"))
+            .unwrap();
         assert_eq!(model.tier, ModelTier::Economy);
     }
 
@@ -1079,7 +1280,9 @@ mod tests {
     #[test]
     fn test_circuit_breaker() {
         let router = LlmRouter::new(test_models(), RoutingMode::Economy);
-        for _ in 0..5 { router.record_model_error("haiku"); }
+        for _ in 0..5 {
+            router.record_model_error("haiku");
+        }
         let model = router.select_model(&req("Hi")).unwrap();
         assert_ne!(model.id, "haiku");
     }
@@ -1096,7 +1299,9 @@ mod tests {
                 r.record_usage(100, 50, 240);
             }));
         }
-        for h in handles { h.join().unwrap(); }
+        for h in handles {
+            h.join().unwrap();
+        }
         assert_eq!(router.usage_snapshot().total_requests, 10);
     }
 
@@ -1108,11 +1313,26 @@ mod tests {
         let request = LlmRequest {
             system_prompt: "You are helpful.".into(),
             messages: vec![
-                LlmMessage { role: "user".into(), content: "Merhaba".into() },
-                LlmMessage { role: "assistant".into(), content: "Merhaba!".into() },
-                LlmMessage { role: "user".into(), content: "Nasılsın".into() },
-                LlmMessage { role: "assistant".into(), content: "İyiyim!".into() },
-                LlmMessage { role: "user".into(), content: "Selam".into() },
+                LlmMessage {
+                    role: "user".into(),
+                    content: "Merhaba".into(),
+                },
+                LlmMessage {
+                    role: "assistant".into(),
+                    content: "Merhaba!".into(),
+                },
+                LlmMessage {
+                    role: "user".into(),
+                    content: "Nasılsın".into(),
+                },
+                LlmMessage {
+                    role: "assistant".into(),
+                    content: "İyiyim!".into(),
+                },
+                LlmMessage {
+                    role: "user".into(),
+                    content: "Selam".into(),
+                },
             ],
             max_tokens: None,
             temperature: None,
@@ -1122,6 +1342,10 @@ mod tests {
             embedding_scores: None,
         };
         let model = router.select_model(&request).unwrap();
-        assert_eq!(model.tier, ModelTier::Economy, "Short message should stay Haiku regardless of history");
+        assert_eq!(
+            model.tier,
+            ModelTier::Economy,
+            "Short message should stay Haiku regardless of history"
+        );
     }
 }

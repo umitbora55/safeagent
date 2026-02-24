@@ -1,0 +1,21 @@
+id: CH-D-003
+name: 'Chaos: policy-engine under cpu_spike_during_evaluation'
+threat_ref: D-003
+category: Denial of Service
+component: policy-engine
+description: 'Test policy-engine resilience when cpu_spike_during_evaluation occurs. Related threat: Policy engine resource exhaustion'
+fault_injection:
+  fault_type: cpu_spike_during_evaluation
+  target: policy-engine
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: timeout_deny
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Denial of Service
+  impact: medium
+  likelihood: low

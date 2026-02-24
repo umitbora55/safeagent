@@ -1,0 +1,7 @@
+[workspace]
+members = [
+  "shared-proto",
+  "shared-identity",
+  "shared-errors"
+]
+resolver = "2"

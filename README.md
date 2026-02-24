@@ -50,43 +50,53 @@ Every message goes through three steps:
 
 ---
 
-## Quickstart
+## Quickstart (5 min)
 
 ### Prerequisites
 
 - Rust toolchain ([rustup.rs](https://rustup.rs))
-- An Anthropic API key (`sk-ant-...`)
-- Optional: Telegram bot token (from [@BotFather](https://t.me/BotFather))
-- Optional: Voyage AI key (for embedding-based routing)
+- `just` task runner
+- Docker (for local OTEL collector during verification)
+- Anthropic API key (`sk-ant-...`)
 
-### Option A: Prebuilt Binary (coming in v0.3.0)
+Optional:
+- Telegram bot token (from [@BotFather](https://t.me/BotFather))
+- Voyage AI key (for embedding-based routing)
 
-Prebuilt binaries for macOS and Linux will be available on [GitHub Releases](https://github.com/umitbora55/safeagent/releases) starting with v0.3.0.
-
-### Option B: Build from Source (current)
-
-Requires Rust toolchain ([rustup.rs](https://rustup.rs)).
+### 1) Build and verify
 
 ```bash
 git clone https://github.com/umitbora55/safeagent.git
 cd safeagent
+just verify
+```
+
+### 2) Initialize
+
+```bash
 cargo build --release
-./target/release/safeagent
+./target/release/safeagent init
 ```
 
-On first run, SafeAgent walks you through setup interactively (a dedicated `safeagent init` wizard is planned for v0.3.0):
+### 3) Run
 
-1. Ask for a vault password (encrypts all stored credentials)
-2. Prompt for your Anthropic API key (stored encrypted, never in plain text)
-3. Optionally ask for Telegram bot token and chat ID
-4. Optionally ask for Voyage AI key (enables smart embedding routing)
+```bash
+./target/release/safeagent run
+```
+
+On first run, SafeAgent walks you through:
+
+1. Vault password (encrypts stored credentials)
+2. Anthropic API key (stored encrypted)
+3. Optional Telegram bot token and chat ID
+4. Optional Voyage AI key (embedding routing)
 
 ```
-  🛡️  SafeAgent v0.1.0
+  🛡️  SafeAgent v1.0.0-rc.1
   Secure AI Assistant
   ─────────────────────
 
-  🔐 Vault şifresi: ********
+  🔐 Vault password: ********
   🤖 Anthropic API key: sk-ant-...  ✅ Stored
   📱 Telegram bot token (Enter to skip): ...
   🧭 Embedding centroids loaded (3x1024)

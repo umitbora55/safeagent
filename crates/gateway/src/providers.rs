@@ -1,8 +1,9 @@
 //! Multi-provider abstraction for LLM APIs.
 //! Supports Anthropic, OpenAI, and Google Gemini.
 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 // ═══════════════════════════════════════════════
 //  Provider Trait
@@ -97,29 +98,37 @@ impl AnthropicProvider {
         vec![
             ModelInfo {
                 id: "claude-haiku-4-5-20250514".into(),
-                provider: ProviderType::Anthropic, tier: "economy".into(),
-                input_price_per_mtok: 0.80, output_price_per_mtok: 4.0,
+                provider: ProviderType::Anthropic,
+                tier: "economy".into(),
+                input_price_per_mtok: 0.80,
+                output_price_per_mtok: 4.0,
                 max_context: 200_000,
             },
             ModelInfo {
                 id: "claude-sonnet-4-5-20250514".into(),
-                provider: ProviderType::Anthropic, tier: "standard".into(),
-                input_price_per_mtok: 3.0, output_price_per_mtok: 15.0,
+                provider: ProviderType::Anthropic,
+                tier: "standard".into(),
+                input_price_per_mtok: 3.0,
+                output_price_per_mtok: 15.0,
                 max_context: 200_000,
             },
             ModelInfo {
                 id: "claude-opus-4-5-20250514".into(),
-                provider: ProviderType::Anthropic, tier: "premium".into(),
-                input_price_per_mtok: 15.0, output_price_per_mtok: 75.0,
+                provider: ProviderType::Anthropic,
+                tier: "premium".into(),
+                input_price_per_mtok: 15.0,
+                output_price_per_mtok: 75.0,
                 max_context: 200_000,
             },
         ]
     }
 
     pub fn build_request_body(&self, req: &UnifiedRequest) -> serde_json::Value {
-        let messages: Vec<serde_json::Value> = req.messages.iter().map(|m| {
-            serde_json::json!({ "role": m.role, "content": m.content })
-        }).collect();
+        let messages: Vec<serde_json::Value> = req
+            .messages
+            .iter()
+            .map(|m| serde_json::json!({ "role": m.role, "content": m.content }))
+            .collect();
 
         let mut body = serde_json::json!({
             "model": req.model,
@@ -146,9 +155,11 @@ impl AnthropicProvider {
         let output = body["usage"]["output_tokens"].as_u64().unwrap_or(0) as u32;
 
         Ok(UnifiedResponse {
-            content, model,
+            content,
+            model,
             provider: ProviderType::Anthropic,
-            input_tokens: input, output_tokens: output,
+            input_tokens: input,
+            output_tokens: output,
             latency_ms: 0,
         })
     }
@@ -176,20 +187,26 @@ impl OpenAIProvider {
         vec![
             ModelInfo {
                 id: "gpt-4o-mini".into(),
-                provider: ProviderType::OpenAI, tier: "economy".into(),
-                input_price_per_mtok: 0.15, output_price_per_mtok: 0.60,
+                provider: ProviderType::OpenAI,
+                tier: "economy".into(),
+                input_price_per_mtok: 0.15,
+                output_price_per_mtok: 0.60,
                 max_context: 128_000,
             },
             ModelInfo {
                 id: "gpt-4o".into(),
-                provider: ProviderType::OpenAI, tier: "standard".into(),
-                input_price_per_mtok: 2.50, output_price_per_mtok: 10.0,
+                provider: ProviderType::OpenAI,
+                tier: "standard".into(),
+                input_price_per_mtok: 2.50,
+                output_price_per_mtok: 10.0,
                 max_context: 128_000,
             },
             ModelInfo {
                 id: "o1".into(),
-                provider: ProviderType::OpenAI, tier: "premium".into(),
-                input_price_per_mtok: 15.0, output_price_per_mtok: 60.0,
+                provider: ProviderType::OpenAI,
+                tier: "premium".into(),
+                input_price_per_mtok: 15.0,
+                output_price_per_mtok: 60.0,
                 max_context: 200_000,
             },
         ]
@@ -225,9 +242,11 @@ impl OpenAIProvider {
         let output = body["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32;
 
         Ok(UnifiedResponse {
-            content, model,
+            content,
+            model,
             provider: ProviderType::OpenAI,
-            input_tokens: input, output_tokens: output,
+            input_tokens: input,
+            output_tokens: output,
             latency_ms: 0,
         })
     }
@@ -255,26 +274,34 @@ impl GeminiProvider {
         vec![
             ModelInfo {
                 id: "gemini-2.0-flash".into(),
-                provider: ProviderType::Gemini, tier: "economy".into(),
-                input_price_per_mtok: 0.075, output_price_per_mtok: 0.30,
+                provider: ProviderType::Gemini,
+                tier: "economy".into(),
+                input_price_per_mtok: 0.075,
+                output_price_per_mtok: 0.30,
                 max_context: 1_000_000,
             },
             ModelInfo {
                 id: "gemini-2.0-pro".into(),
-                provider: ProviderType::Gemini, tier: "standard".into(),
-                input_price_per_mtok: 1.25, output_price_per_mtok: 5.0,
+                provider: ProviderType::Gemini,
+                tier: "standard".into(),
+                input_price_per_mtok: 1.25,
+                output_price_per_mtok: 5.0,
                 max_context: 2_000_000,
             },
         ]
     }
 
     pub fn build_request_body(&self, req: &UnifiedRequest) -> serde_json::Value {
-        let parts: Vec<serde_json::Value> = req.messages.iter().map(|m| {
-            serde_json::json!({
-                "role": if m.role == "assistant" { "model" } else { "user" },
-                "parts": [{ "text": m.content }]
+        let parts: Vec<serde_json::Value> = req
+            .messages
+            .iter()
+            .map(|m| {
+                serde_json::json!({
+                    "role": if m.role == "assistant" { "model" } else { "user" },
+                    "parts": [{ "text": m.content }]
+                })
             })
-        }).collect();
+            .collect();
 
         let mut body = serde_json::json!({
             "contents": parts,
@@ -297,14 +324,19 @@ impl GeminiProvider {
             .as_str()
             .unwrap_or("")
             .to_string();
-        let input = body["usageMetadata"]["promptTokenCount"].as_u64().unwrap_or(0) as u32;
-        let output = body["usageMetadata"]["candidatesTokenCount"].as_u64().unwrap_or(0) as u32;
+        let input = body["usageMetadata"]["promptTokenCount"]
+            .as_u64()
+            .unwrap_or(0) as u32;
+        let output = body["usageMetadata"]["candidatesTokenCount"]
+            .as_u64()
+            .unwrap_or(0) as u32;
 
         Ok(UnifiedResponse {
             content,
             model: "gemini".into(),
             provider: ProviderType::Gemini,
-            input_tokens: input, output_tokens: output,
+            input_tokens: input,
+            output_tokens: output,
             latency_ms: 0,
         })
     }
@@ -344,7 +376,7 @@ impl MultiProviderRouter {
     }
 
     /// Select best provider based on strategy
-    pub fn select_provider(&self, tier: &str) -> Option<&ProviderConfig> {
+    pub fn select_provider(&self, _tier: &str) -> Option<&ProviderConfig> {
         let enabled = self.enabled_providers();
         if enabled.is_empty() {
             return None;
@@ -357,17 +389,13 @@ impl MultiProviderRouter {
             }
             RoutingStrategy::Fallback => {
                 // Pick highest priority (lowest number)
-                enabled.iter()
-                    .min_by_key(|p| p.priority)
-                    .copied()
+                enabled.iter().min_by_key(|p| p.priority).copied()
             }
             RoutingStrategy::RoundRobin => {
                 // Simple: just pick first enabled
                 enabled.first().copied()
             }
-            RoutingStrategy::LatencyOptimized => {
-                enabled.first().copied()
-            }
+            RoutingStrategy::LatencyOptimized => enabled.first().copied(),
         }
     }
 
@@ -381,7 +409,9 @@ impl MultiProviderRouter {
     pub fn all_models(&self) -> Vec<ModelInfo> {
         let mut models = vec![];
         for p in &self.providers {
-            if !p.enabled { continue; }
+            if !p.enabled {
+                continue;
+            }
             match p.provider_type {
                 ProviderType::Anthropic => models.extend(AnthropicProvider::models()),
                 ProviderType::OpenAI => models.extend(OpenAIProvider::models()),
@@ -401,7 +431,10 @@ mod tests {
         let provider = AnthropicProvider::new("sk-test");
         let req = UnifiedRequest {
             model: "claude-haiku-4-5-20250514".into(),
-            messages: vec![UnifiedMessage { role: "user".into(), content: "Hello".into() }],
+            messages: vec![UnifiedMessage {
+                role: "user".into(),
+                content: "Hello".into(),
+            }],
             system_prompt: Some("You are helpful".into()),
             max_tokens: 1024,
             temperature: 0.7,
@@ -418,7 +451,10 @@ mod tests {
         let provider = OpenAIProvider::new("sk-test");
         let req = UnifiedRequest {
             model: "gpt-4o".into(),
-            messages: vec![UnifiedMessage { role: "user".into(), content: "Hello".into() }],
+            messages: vec![UnifiedMessage {
+                role: "user".into(),
+                content: "Hello".into(),
+            }],
             system_prompt: Some("You are helpful".into()),
             max_tokens: 1024,
             temperature: 0.7,
@@ -436,7 +472,10 @@ mod tests {
         let provider = GeminiProvider::new("key-test");
         let req = UnifiedRequest {
             model: "gemini-2.0-flash".into(),
-            messages: vec![UnifiedMessage { role: "user".into(), content: "Hello".into() }],
+            messages: vec![UnifiedMessage {
+                role: "user".into(),
+                content: "Hello".into(),
+            }],
             system_prompt: Some("Be brief".into()),
             max_tokens: 512,
             temperature: 0.5,
@@ -444,7 +483,9 @@ mod tests {
         };
         let body = provider.build_request_body(&req);
         assert!(body["contents"][0]["parts"][0]["text"].as_str().is_some());
-        assert!(body["systemInstruction"]["parts"][0]["text"].as_str().is_some());
+        assert!(body["systemInstruction"]["parts"][0]["text"]
+            .as_str()
+            .is_some());
         assert_eq!(body["generationConfig"]["maxOutputTokens"], 512);
     }
 
@@ -501,8 +542,8 @@ mod tests {
         let chain = router.fallback_chain();
         assert_eq!(chain.len(), 3);
         assert_eq!(chain[0].provider_type, ProviderType::Anthropic); // priority 1
-        assert_eq!(chain[1].provider_type, ProviderType::OpenAI);    // priority 2
-        assert_eq!(chain[2].provider_type, ProviderType::Gemini);    // priority 3
+        assert_eq!(chain[1].provider_type, ProviderType::OpenAI); // priority 2
+        assert_eq!(chain[2].provider_type, ProviderType::Gemini); // priority 3
     }
 
     #[test]

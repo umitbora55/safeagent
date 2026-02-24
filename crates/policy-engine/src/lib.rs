@@ -20,6 +20,12 @@ impl ActionId {
     }
 }
 
+impl Default for ActionId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl std::fmt::Display for ActionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -292,7 +298,11 @@ impl PolicyEngine {
     }
 
     /// Approve a pending action
-    pub fn approve(&self, action_id: &ActionId, approved_by: Option<&UserId>) -> Option<PendingAction> {
+    pub fn approve(
+        &self,
+        action_id: &ActionId,
+        approved_by: Option<&UserId>,
+    ) -> Option<PendingAction> {
         if let Some(mut entry) = self.pending.get_mut(&action_id.0) {
             entry.status = ActionStatus::Approved;
             let action = entry.clone();
@@ -305,7 +315,11 @@ impl PolicyEngine {
     }
 
     /// Reject a pending action
-    pub fn reject(&self, action_id: &ActionId, rejected_by: Option<&UserId>) -> Option<PendingAction> {
+    pub fn reject(
+        &self,
+        action_id: &ActionId,
+        rejected_by: Option<&UserId>,
+    ) -> Option<PendingAction> {
         if let Some(mut entry) = self.pending.get_mut(&action_id.0) {
             entry.status = ActionStatus::Rejected;
             let action = entry.clone();
@@ -320,8 +334,14 @@ impl PolicyEngine {
     /// Record spend in microdollars. Returns false if limit exceeded.
     /// $1.50 = 1_500_000 microdollars
     pub fn record_spend(&self, microdollars: u64) -> bool {
-        let new_daily = self.daily_spend_microdollars.fetch_add(microdollars, Ordering::Relaxed) + microdollars;
-        let new_monthly = self.monthly_spend_microdollars.fetch_add(microdollars, Ordering::Relaxed) + microdollars;
+        let new_daily = self
+            .daily_spend_microdollars
+            .fetch_add(microdollars, Ordering::Relaxed)
+            + microdollars;
+        let new_monthly = self
+            .monthly_spend_microdollars
+            .fetch_add(microdollars, Ordering::Relaxed)
+            + microdollars;
         let config = self.config.read().unwrap();
 
         if let Some(limit) = config.daily_spend_limit_microdollars {
@@ -379,7 +399,8 @@ impl PolicyEngine {
             if daily >= limit {
                 return Err(format!(
                     "Daily budget limit reached (${:.2} / ${:.2}). Resets at midnight UTC.",
-                    daily as f64 / 1_000_000.0, limit as f64 / 1_000_000.0
+                    daily as f64 / 1_000_000.0,
+                    limit as f64 / 1_000_000.0
                 ));
             }
         }
@@ -387,7 +408,8 @@ impl PolicyEngine {
             if monthly >= limit {
                 return Err(format!(
                     "Monthly budget limit reached (${:.2} / ${:.2}). Resets next month.",
-                    monthly as f64 / 1_000_000.0, limit as f64 / 1_000_000.0
+                    monthly as f64 / 1_000_000.0,
+                    limit as f64 / 1_000_000.0
                 ));
             }
         }
@@ -396,7 +418,8 @@ impl PolicyEngine {
 
     /// Get audit log entries (most recent first)
     pub fn audit_entries(&self) -> Vec<AuditEntry> {
-        let mut entries: Vec<AuditEntry> = self.audit_log.iter().map(|e| e.value().clone()).collect();
+        let mut entries: Vec<AuditEntry> =
+            self.audit_log.iter().map(|e| e.value().clone()).collect();
         entries.sort_by(|a, b| b.decided_at.cmp(&a.decided_at));
         entries
     }
@@ -473,7 +496,10 @@ mod tests {
         );
         assert!(matches!(
             decision,
-            PolicyDecision::AllowWithNotification { timeout_secs: 30, .. }
+            PolicyDecision::AllowWithNotification {
+                timeout_secs: 30,
+                ..
+            }
         ));
     }
 
@@ -510,9 +536,9 @@ mod tests {
             ..Default::default()
         };
         let engine = PolicyEngine::new(config);
-        assert!(engine.record_spend(500_000));   // $0.50 -> ok
-        assert!(engine.record_spend(300_000));   // $0.80 -> ok
-        assert!(!engine.record_spend(500_000));  // $1.30 -> exceeds
+        assert!(engine.record_spend(500_000)); // $0.50 -> ok
+        assert!(engine.record_spend(300_000)); // $0.80 -> ok
+        assert!(!engine.record_spend(500_000)); // $1.30 -> exceeds
     }
 
     #[test]

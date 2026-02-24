@@ -27,7 +27,9 @@ impl WhisperSTT {
 
     /// Transcribe audio bytes to text.
     pub async fn transcribe(&self, audio_data: &[u8], filename: &str) -> Result<String, String> {
-        let api_key = self.api_key.as_ref()
+        let api_key = self
+            .api_key
+            .as_ref()
             .ok_or("OpenAI API key not configured for Whisper STT")?;
 
         let part = reqwest::multipart::Part::bytes(audio_data.to_vec())
@@ -40,7 +42,8 @@ impl WhisperSTT {
             .text("response_format", "text")
             .part("file", part);
 
-        let resp = self.client
+        let resp = self
+            .client
             .post("https://api.openai.com/v1/audio/transcriptions")
             .header("Authorization", format!("Bearer {}", api_key))
             .multipart(form)
@@ -54,7 +57,9 @@ impl WhisperSTT {
             return Err(format!("Whisper API error {}: {}", status, body));
         }
 
-        let text = resp.text().await
+        let text = resp
+            .text()
+            .await
             .map_err(|e| format!("Failed to read Whisper response: {}", e))?;
 
         Ok(text.trim().to_string())
@@ -63,12 +68,18 @@ impl WhisperSTT {
 
 #[async_trait]
 impl Skill for WhisperSTT {
-    fn id(&self) -> &str { "whisper_stt" }
-    fn name(&self) -> &str { "Whisper Speech-to-Text" }
+    fn id(&self) -> &str {
+        "whisper_stt"
+    }
+    fn name(&self) -> &str {
+        "Whisper Speech-to-Text"
+    }
     fn description(&self) -> &str {
         "Transcribe audio to text using OpenAI Whisper. Input: path to audio file."
     }
-    fn permissions(&self) -> Vec<Permission> { vec![Permission::read_web()] }
+    fn permissions(&self) -> Vec<Permission> {
+        vec![Permission::read_web()]
+    }
 
     async fn execute(&self, input: &str) -> SkillResult {
         if !self.config.enabled {
@@ -118,7 +129,9 @@ impl OpenAITTS {
 
     /// Convert text to speech, return audio bytes (mp3).
     pub async fn synthesize(&self, text: &str) -> Result<Vec<u8>, String> {
-        let api_key = self.api_key.as_ref()
+        let api_key = self
+            .api_key
+            .as_ref()
             .ok_or("OpenAI API key not configured for TTS")?;
 
         let body = serde_json::json!({
@@ -128,7 +141,8 @@ impl OpenAITTS {
             "response_format": "mp3"
         });
 
-        let resp = self.client
+        let resp = self
+            .client
             .post("https://api.openai.com/v1/audio/speech")
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
@@ -143,7 +157,9 @@ impl OpenAITTS {
             return Err(format!("TTS API error {}: {}", status, body));
         }
 
-        let bytes = resp.bytes().await
+        let bytes = resp
+            .bytes()
+            .await
             .map_err(|e| format!("Failed to read TTS response: {}", e))?;
 
         Ok(bytes.to_vec())
@@ -174,7 +190,10 @@ mod tests {
 
     #[test]
     fn test_whisper_disabled() {
-        let config = SkillConfig { enabled: false, ..Default::default() };
+        let config = SkillConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let stt = WhisperSTT::new(Some("key".into())).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(stt.execute("test.ogg"));

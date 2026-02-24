@@ -1,0 +1,21 @@
+id: CH-T-001
+name: 'Chaos: audit-log under disk_corruption_mid_write'
+threat_ref: T-001
+category: Tampering
+component: audit-log
+description: 'Test audit-log resilience when disk_corruption_mid_write occurs. Related threat: Audit log modification'
+fault_injection:
+  fault_type: disk_corruption_mid_write
+  target: audit-log
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: chain_break_detected
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Tampering
+  impact: critical
+  likelihood: low

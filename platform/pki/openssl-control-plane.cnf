@@ -1,0 +1,14 @@
+[ req ]
+prompt = no
+distinguished_name = dn
+req_extensions = v3_req
+
+[ dn ]
+CN = safeagent-control-plane
+
+[ v3_req ]
+subjectAltName = @alt_names
+
+[ alt_names ]
+DNS.1 = control-plane
+IP.1 = 127.0.0.1

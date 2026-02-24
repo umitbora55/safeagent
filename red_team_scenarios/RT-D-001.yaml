@@ -1,0 +1,31 @@
+id: RT-D-001
+name: 'Red Team: Shell command timeout abuse'
+threat_ref: D-001
+category: Denial of Service
+component: shell_executor
+description: Verify that 'Shell command timeout abuse' is mitigated. Attacker executes long-running commands to exhaust resources
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for shell_executor component
+- step: 2
+  action: long_running_command
+  input: sleep 3600
+  description: Attempt long_running_command with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: timeout_and_kill'
+assertions:
+- assertion: action_long_running_command_blocked
+  expected_outcome: timeout_and_kill
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Denial of Service
+  impact: medium
+  likelihood: medium
+  mitigations: Enforced timeout (default 30s), Output size cap, kill_on_drop

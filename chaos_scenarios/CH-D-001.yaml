@@ -1,0 +1,21 @@
+id: CH-D-001
+name: 'Chaos: shell_executor under zombie_process_accumulation'
+threat_ref: D-001
+category: Denial of Service
+component: shell_executor
+description: 'Test shell_executor resilience when zombie_process_accumulation occurs. Related threat: Shell command timeout abuse'
+fault_injection:
+  fault_type: zombie_process_accumulation
+  target: shell_executor
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: process_cleanup
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Denial of Service
+  impact: medium
+  likelihood: medium

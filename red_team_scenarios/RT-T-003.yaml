@@ -1,0 +1,31 @@
+id: RT-T-003
+name: 'Red Team: Policy bypass via malformed input'
+threat_ref: T-003
+category: Tampering
+component: policy-engine
+description: Verify that 'Policy bypass via malformed input' is mitigated. Attacker crafts input to bypass policy evaluation
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for policy-engine component
+- step: 2
+  action: malformed_policy_context
+  input: null_field_values
+  description: Attempt malformed_policy_context with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: deny_with_error'
+assertions:
+- assertion: action_malformed_policy_context_blocked
+  expected_outcome: deny_with_error
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Tampering
+  impact: high
+  likelihood: low
+  mitigations: Input validation, Strict parsing, Default deny

@@ -1,7 +1,7 @@
-use chrono::Datelike;
+use crate::google_oauth::{get_valid_token, OAuthTokens};
 use crate::{Permission, Skill, SkillConfig, SkillResult};
-use crate::google_oauth::{OAuthTokens, get_valid_token};
 use async_trait::async_trait;
+use chrono::Datelike;
 
 /// Read events from Google Calendar (read-only).
 pub struct CalendarReaderSkill {
@@ -44,7 +44,8 @@ impl CalendarReaderSkill {
 
     async fn get_access_token(&self) -> Result<String, String> {
         let current = self.tokens.read().await.clone();
-        let current = current.ok_or("Google Calendar not authorized. Run `safeagent init` to connect.")?;
+        let current =
+            current.ok_or("Google Calendar not authorized. Run `safeagent init` to connect.")?;
 
         let refreshed = get_valid_token(&self.client_id, &self.client_secret, &current).await?;
         let access_token = refreshed.access_token.clone();
@@ -61,12 +62,18 @@ impl CalendarReaderSkill {
 
 #[async_trait]
 impl Skill for CalendarReaderSkill {
-    fn id(&self) -> &str { "calendar_reader" }
-    fn name(&self) -> &str { "Google Calendar Reader" }
+    fn id(&self) -> &str {
+        "calendar_reader"
+    }
+    fn name(&self) -> &str {
+        "Google Calendar Reader"
+    }
     fn description(&self) -> &str {
         "Read events from Google Calendar. Input: 'today', 'tomorrow', 'this week', or a date like '2025-03-15'. Returns: list of events with time, title, and location."
     }
-    fn permissions(&self) -> Vec<Permission> { vec![Permission::read_calendar()] }
+    fn permissions(&self) -> Vec<Permission> {
+        vec![Permission::read_calendar()]
+    }
 
     async fn execute(&self, input: &str) -> SkillResult {
         if !self.config.enabled {
@@ -75,7 +82,9 @@ impl Skill for CalendarReaderSkill {
 
         let query = input.trim().to_lowercase();
         if query.is_empty() {
-            return SkillResult::err("Empty query. Try: 'today', 'tomorrow', 'this week', or a date.".into());
+            return SkillResult::err(
+                "Empty query. Try: 'today', 'tomorrow', 'this week', or a date.".into(),
+            );
         }
 
         let access_token = match self.get_access_token().await {
@@ -90,7 +99,8 @@ impl Skill for CalendarReaderSkill {
             time_min, time_max
         );
 
-        let resp = match self.client
+        let resp = match self
+            .client
             .get(&url)
             .header("Authorization", format!("Bearer {}", access_token))
             .send()
@@ -118,10 +128,12 @@ impl Skill for CalendarReaderSkill {
                 for item in items {
                     let summary = item["summary"].as_str().unwrap_or("(No title)");
                     let location = item["location"].as_str().unwrap_or("");
-                    let start = item["start"]["dateTime"].as_str()
+                    let start = item["start"]["dateTime"]
+                        .as_str()
                         .or_else(|| item["start"]["date"].as_str())
                         .unwrap_or("?");
-                    let end = item["end"]["dateTime"].as_str()
+                    let end = item["end"]["dateTime"]
+                        .as_str()
                         .or_else(|| item["end"]["date"].as_str())
                         .unwrap_or("?");
                     let status = item["status"].as_str().unwrap_or("");
@@ -260,8 +272,12 @@ mod tests {
 
     #[test]
     fn test_disabled() {
-        let config = SkillConfig { enabled: false, ..Default::default() };
-        let skill = CalendarReaderSkill::new("id".into(), "secret".into(), None).with_config(config);
+        let config = SkillConfig {
+            enabled: false,
+            ..Default::default()
+        };
+        let skill =
+            CalendarReaderSkill::new("id".into(), "secret".into(), None).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("today"));
         assert!(!result.success);

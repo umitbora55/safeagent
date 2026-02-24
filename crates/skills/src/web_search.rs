@@ -28,12 +28,18 @@ impl WebSearchSkill {
 
 #[async_trait]
 impl Skill for WebSearchSkill {
-    fn id(&self) -> &str { "web_search" }
-    fn name(&self) -> &str { "Web Search" }
+    fn id(&self) -> &str {
+        "web_search"
+    }
+    fn name(&self) -> &str {
+        "Web Search"
+    }
     fn description(&self) -> &str {
         "Search the web using Brave Search API. Input: search query string. Returns: top results with title, URL, and snippet."
     }
-    fn permissions(&self) -> Vec<Permission> { vec![Permission::read_web()] }
+    fn permissions(&self) -> Vec<Permission> {
+        vec![Permission::read_web()]
+    }
 
     async fn execute(&self, input: &str) -> SkillResult {
         if !self.config.enabled {
@@ -45,19 +51,22 @@ impl Skill for WebSearchSkill {
             return SkillResult::err("Empty search query".into());
         }
 
-        let api_key = match &self.api_key {
-            Some(k) => k.clone(),
-            None => return SkillResult::err(
-                "Brave Search API key not configured. Get one at https://brave.com/search/api/".into()
-            ),
-        };
+        let api_key =
+            match &self.api_key {
+                Some(k) => k.clone(),
+                None => return SkillResult::err(
+                    "Brave Search API key not configured. Get one at https://brave.com/search/api/"
+                        .into(),
+                ),
+            };
 
         let url = format!(
             "https://api.search.brave.com/res/v1/web/search?q={}&count=5",
             urlencoding_pub(query)
         );
 
-        let resp = match self.client
+        let resp = match self
+            .client
             .get(&url)
             .header("X-Subscription-Token", &api_key)
             .header("Accept", "application/json")
@@ -85,16 +94,23 @@ impl Skill for WebSearchSkill {
                     let title = item["title"].as_str().unwrap_or("No title");
                     let url = item["url"].as_str().unwrap_or("");
                     let desc = item["description"].as_str().unwrap_or("No description");
-                    text.push_str(&format!("{}. {}\n   {}\n   {}\n\n", i + 1, title, url, desc));
+                    text.push_str(&format!(
+                        "{}. {}\n   {}\n   {}\n\n",
+                        i + 1,
+                        title,
+                        url,
+                        desc
+                    ));
                 }
                 text
             }
             _ => "No results found.".into(),
         };
 
-        SkillResult::ok(output)
-            .with_meta("query", query)
-            .with_meta("result_count", &results.map(|r| r.len()).unwrap_or(0).to_string())
+        SkillResult::ok(output).with_meta("query", query).with_meta(
+            "result_count",
+            &results.map(|r| r.len()).unwrap_or(0).to_string(),
+        )
     }
 }
 
@@ -144,7 +160,10 @@ mod tests {
 
     #[test]
     fn test_disabled_skill() {
-        let config = SkillConfig { enabled: false, ..Default::default() };
+        let config = SkillConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let skill = WebSearchSkill::new(Some("key".into())).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("test"));

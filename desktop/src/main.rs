@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-
 #[tauri::command]
 fn get_version() -> String {
     "0.1.0".to_string()

@@ -22,22 +22,46 @@ pub struct McpToolCallParams {
 
 pub async fn mcp_list_tools() -> impl IntoResponse {
     let tools = vec![
-        McpTool { name: "web_search".into(), description: "Search the web".into(),
-            input_schema: serde_json::json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}) },
-        McpTool { name: "url_fetch".into(), description: "Fetch a web page".into(),
-            input_schema: serde_json::json!({"type":"object","properties":{"url":{"type":"string"}},"required":["url"]}) },
-        McpTool { name: "file_read".into(), description: "Read a file".into(),
-            input_schema: serde_json::json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}) },
-        McpTool { name: "file_write".into(), description: "Write a file".into(),
-            input_schema: serde_json::json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}) },
-        McpTool { name: "calendar_read".into(), description: "Read Google Calendar events".into(),
-            input_schema: serde_json::json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}) },
-        McpTool { name: "calendar_write".into(), description: "Create a calendar event".into(),
-            input_schema: serde_json::json!({"type":"object","properties":{"title":{"type":"string"},"date":{"type":"string"},"start":{"type":"string"},"end":{"type":"string"}},"required":["title","date","start","end"]}) },
-        McpTool { name: "email_read".into(), description: "Read Gmail emails".into(),
-            input_schema: serde_json::json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}) },
-        McpTool { name: "email_send".into(), description: "Send email via Gmail".into(),
-            input_schema: serde_json::json!({"type":"object","properties":{"to":{"type":"string"},"subject":{"type":"string"},"body":{"type":"string"}},"required":["to","subject","body"]}) },
+        McpTool {
+            name: "web_search".into(),
+            description: "Search the web".into(),
+            input_schema: serde_json::json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}),
+        },
+        McpTool {
+            name: "url_fetch".into(),
+            description: "Fetch a web page".into(),
+            input_schema: serde_json::json!({"type":"object","properties":{"url":{"type":"string"}},"required":["url"]}),
+        },
+        McpTool {
+            name: "file_read".into(),
+            description: "Read a file".into(),
+            input_schema: serde_json::json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
+        },
+        McpTool {
+            name: "file_write".into(),
+            description: "Write a file".into(),
+            input_schema: serde_json::json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}),
+        },
+        McpTool {
+            name: "calendar_read".into(),
+            description: "Read Google Calendar events".into(),
+            input_schema: serde_json::json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}),
+        },
+        McpTool {
+            name: "calendar_write".into(),
+            description: "Create a calendar event".into(),
+            input_schema: serde_json::json!({"type":"object","properties":{"title":{"type":"string"},"date":{"type":"string"},"start":{"type":"string"},"end":{"type":"string"}},"required":["title","date","start","end"]}),
+        },
+        McpTool {
+            name: "email_read".into(),
+            description: "Read Gmail emails".into(),
+            input_schema: serde_json::json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}),
+        },
+        McpTool {
+            name: "email_send".into(),
+            description: "Send email via Gmail".into(),
+            input_schema: serde_json::json!({"type":"object","properties":{"to":{"type":"string"},"subject":{"type":"string"},"body":{"type":"string"}},"required":["to","subject","body"]}),
+        },
     ];
 
     Json(serde_json::json!({"jsonrpc":"2.0","result":{"tools": tools}}))
@@ -52,7 +76,8 @@ pub async fn mcp_handle(Json(request): Json<McpToolCallRequest>) -> impl IntoRes
                 "capabilities":{"tools":{"listChanged":false}},
                 "serverInfo":{"name":"safeagent-mcp","version":env!("CARGO_PKG_VERSION")}
             }
-        })).into_response(),
+        }))
+        .into_response(),
         "tools/list" => mcp_list_tools().await.into_response(),
         "tools/call" => {
             let params = match request.params {
@@ -69,7 +94,11 @@ pub async fn mcp_handle(Json(request): Json<McpToolCallRequest>) -> impl IntoRes
                 "result":{"content":[{"type":"text","text":format!("Tool '{}' called with: {}", tool_name, args)}],"isError":false}
             })).into_response()
         }
-        _ => Json(mcp_error(-32601, &format!("Method not found: {}", request.method))).into_response(),
+        _ => Json(mcp_error(
+            -32601,
+            &format!("Method not found: {}", request.method),
+        ))
+        .into_response(),
     }
 }
 

@@ -1,0 +1,21 @@
+id: CH-S-002
+name: 'Chaos: capability-tokens under nonce_cache_memory_pressure'
+threat_ref: S-002
+category: Spoofing
+component: capability-tokens
+description: 'Test capability-tokens resilience when nonce_cache_memory_pressure occurs. Related threat: Session impersonation'
+fault_injection:
+  fault_type: nonce_cache_memory_pressure
+  target: capability-tokens
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: conservative_rejection
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Spoofing
+  impact: high
+  likelihood: medium

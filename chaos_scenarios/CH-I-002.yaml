@@ -1,0 +1,21 @@
+id: CH-I-002
+name: 'Chaos: shell_executor under symlink_to_sensitive_file'
+threat_ref: I-002
+category: Information Disclosure
+component: shell_executor
+description: 'Test shell_executor resilience when symlink_to_sensitive_file occurs. Related threat: Path traversal information leak'
+fault_injection:
+  fault_type: symlink_to_sensitive_file
+  target: shell_executor
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: canonical_path_blocked
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Information Disclosure
+  impact: high
+  likelihood: medium

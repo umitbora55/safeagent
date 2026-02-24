@@ -1,0 +1,31 @@
+id: RT-I-001
+name: 'Red Team: API key exposure in logs'
+threat_ref: I-001
+category: Information Disclosure
+component: audit-log
+description: Verify that 'API key exposure in logs' is mitigated. API keys accidentally logged in plaintext
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for audit-log component
+- step: 2
+  action: log_with_secrets
+  input: sk-ant-secret123abc456def
+  description: Attempt log_with_secrets with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: secret_redacted'
+assertions:
+- assertion: action_log_with_secrets_blocked
+  expected_outcome: secret_redacted
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Information Disclosure
+  impact: critical
+  likelihood: medium
+  mitigations: Secret redaction (sk-ant-****, pa-****), Pattern-based filtering

@@ -40,7 +40,8 @@ impl FileReaderSkill {
                 .join(&path)
         };
 
-        let canonical = resolved.canonicalize()
+        let canonical = resolved
+            .canonicalize()
             .map_err(|e| format!("Cannot resolve path '{}': {}", input_path, e))?;
 
         // Check if it's a symlink pointing outside allowed dirs
@@ -85,12 +86,18 @@ impl FileReaderSkill {
 
 #[async_trait]
 impl Skill for FileReaderSkill {
-    fn id(&self) -> &str { "file_reader" }
-    fn name(&self) -> &str { "File Reader" }
+    fn id(&self) -> &str {
+        "file_reader"
+    }
+    fn name(&self) -> &str {
+        "File Reader"
+    }
     fn description(&self) -> &str {
         "Read a file from an allowlisted directory. Input: file path. Returns: file contents (text only)."
     }
-    fn permissions(&self) -> Vec<Permission> { vec![Permission::read_fs()] }
+    fn permissions(&self) -> Vec<Permission> {
+        vec![Permission::read_fs()]
+    }
 
     async fn execute(&self, input: &str) -> SkillResult {
         if !self.config.enabled {
@@ -122,7 +129,8 @@ impl Skill for FileReaderSkill {
         if metadata.len() as usize > self.config.max_response_bytes {
             return SkillResult::err(format!(
                 "File too large: {} bytes (max: {} bytes)",
-                metadata.len(), self.config.max_response_bytes
+                metadata.len(),
+                self.config.max_response_bytes
             ));
         }
 
@@ -132,12 +140,13 @@ impl Skill for FileReaderSkill {
             Err(_) => {
                 // Might be binary — try reading bytes and report
                 return SkillResult::err(
-                    "File is not valid UTF-8 text. Only text files are supported.".into()
+                    "File is not valid UTF-8 text. Only text files are supported.".into(),
                 );
             }
         };
 
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("unknown");
 
@@ -154,9 +163,13 @@ mod tests {
     use std::fs;
 
     fn setup_test_dir() -> (PathBuf, PathBuf) {
-        let dir = std::env::temp_dir().join(format!("safeagent_filereader_test_{}", 
+        let dir = std::env::temp_dir().join(format!(
+            "safeagent_filereader_test_{}",
             std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos()));
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("test.txt");
         fs::write(&file, "hello world").unwrap();
@@ -216,7 +229,10 @@ mod tests {
 
     #[test]
     fn test_disabled() {
-        let config = SkillConfig { enabled: false, ..Default::default() };
+        let config = SkillConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let skill = FileReaderSkill::new(vec![PathBuf::from("/tmp")]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("/tmp/test.txt"));
@@ -238,7 +254,10 @@ mod tests {
     #[test]
     fn test_file_too_large() {
         let (dir, file) = setup_test_dir();
-        let config = SkillConfig { max_response_bytes: 5, ..Default::default() };
+        let config = SkillConfig {
+            max_response_bytes: 5,
+            ..Default::default()
+        };
         let skill = FileReaderSkill::new(vec![dir.clone()]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute(file.to_str().unwrap()));

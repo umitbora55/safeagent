@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 /// A user profile with isolated resources.
@@ -111,7 +111,12 @@ impl UserManager {
     }
 
     /// Update a user's spending limits.
-    pub fn set_user_limits(&self, user_id: &str, daily: Option<u64>, monthly: Option<u64>) -> anyhow::Result<()> {
+    pub fn set_user_limits(
+        &self,
+        user_id: &str,
+        daily: Option<u64>,
+        monthly: Option<u64>,
+    ) -> anyhow::Result<()> {
         let mut users = self.users.lock().unwrap();
         if let Some(user) = users.get_mut(user_id) {
             user.daily_spend_limit_microdollars = daily;
@@ -151,9 +156,15 @@ impl UserManager {
     pub fn can_use_skill(&self, user_id: &str, skill_id: &str) -> bool {
         let users = self.users.lock().unwrap();
         if let Some(user) = users.get(user_id) {
-            if !user.active { return false; }
-            if user.role == UserRole::Admin { return true; }
-            if user.role == UserRole::ReadOnly { return skill_id.starts_with("read") || skill_id.contains("_reader"); }
+            if !user.active {
+                return false;
+            }
+            if user.role == UserRole::Admin {
+                return true;
+            }
+            if user.role == UserRole::ReadOnly {
+                return skill_id.starts_with("read") || skill_id.contains("_reader");
+            }
             user.allowed_skills.is_empty() || user.allowed_skills.contains(&skill_id.to_string())
         } else {
             false
@@ -222,8 +233,13 @@ mod tests {
     use super::*;
 
     fn temp_manager() -> UserManager {
-        let dir = std::env::temp_dir().join(format!("safeagent_multiuser_test_{}",
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos()));
+        let dir = std::env::temp_dir().join(format!(
+            "safeagent_multiuser_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         UserManager::new(dir).unwrap()
     }
@@ -257,7 +273,8 @@ mod tests {
     fn test_set_limits() {
         let mgr = temp_manager();
         let user = mgr.create_user("C", UserRole::Member).unwrap();
-        mgr.set_user_limits(&user.id, Some(5_000_000), Some(50_000_000)).unwrap();
+        mgr.set_user_limits(&user.id, Some(5_000_000), Some(50_000_000))
+            .unwrap();
         let fetched = mgr.get_user(&user.id).unwrap();
         assert_eq!(fetched.daily_spend_limit_microdollars, Some(5_000_000));
     }
@@ -292,7 +309,8 @@ mod tests {
     fn test_skill_access_member_allowlist() {
         let mgr = temp_manager();
         let user = mgr.create_user("M", UserRole::Member).unwrap();
-        mgr.set_user_skills(&user.id, vec!["web_search".into()]).unwrap();
+        mgr.set_user_skills(&user.id, vec!["web_search".into()])
+            .unwrap();
         assert!(mgr.can_use_skill(&user.id, "web_search"));
         assert!(!mgr.can_use_skill(&user.id, "email_sender"));
     }

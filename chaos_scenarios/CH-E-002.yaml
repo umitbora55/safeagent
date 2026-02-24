@@ -1,0 +1,21 @@
+id: CH-E-002
+name: 'Chaos: capability-tokens under scope_validation_bypass_attempt'
+threat_ref: E-002
+category: Elevation of Privilege
+component: capability-tokens
+description: 'Test capability-tokens resilience when scope_validation_bypass_attempt occurs. Related threat: Scope escalation via wildcard'
+fault_injection:
+  fault_type: scope_validation_bypass_attempt
+  target: capability-tokens
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: enforcement_holds
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Elevation of Privilege
+  impact: high
+  likelihood: low

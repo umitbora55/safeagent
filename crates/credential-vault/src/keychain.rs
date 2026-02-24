@@ -11,11 +11,23 @@ pub fn store_password(password: &str) -> Result<(), String> {
     {
         use std::process::Command;
         let status = Command::new("security")
-            .args(["add-generic-password", "-a", ACCOUNT_NAME, "-s", SERVICE_NAME, "-w", password, "-U"])
+            .args([
+                "add-generic-password",
+                "-a",
+                ACCOUNT_NAME,
+                "-s",
+                SERVICE_NAME,
+                "-w",
+                password,
+                "-U",
+            ])
             .output()
             .map_err(|e| format!("Failed to run security command: {}", e))?;
         if !status.status.success() {
-            return Err(format!("Keychain store failed: {}", String::from_utf8_lossy(&status.stderr)));
+            return Err(format!(
+                "Keychain store failed: {}",
+                String::from_utf8_lossy(&status.stderr)
+            ));
         }
         Ok(())
     }
@@ -23,7 +35,15 @@ pub fn store_password(password: &str) -> Result<(), String> {
     {
         use std::process::Command;
         let status = Command::new("secret-tool")
-            .args(["store", "--label", "SafeAgent Vault Password", "service", SERVICE_NAME, "account", ACCOUNT_NAME])
+            .args([
+                "store",
+                "--label",
+                "SafeAgent Vault Password",
+                "service",
+                SERVICE_NAME,
+                "account",
+                ACCOUNT_NAME,
+            ])
             .stdin(std::process::Stdio::piped())
             .spawn()
             .and_then(|mut child| {
@@ -52,7 +72,14 @@ pub fn retrieve_password() -> Result<String, String> {
     {
         use std::process::Command;
         let output = Command::new("security")
-            .args(["find-generic-password", "-a", ACCOUNT_NAME, "-s", SERVICE_NAME, "-w"])
+            .args([
+                "find-generic-password",
+                "-a",
+                ACCOUNT_NAME,
+                "-s",
+                SERVICE_NAME,
+                "-w",
+            ])
             .output()
             .map_err(|e| format!("Failed to run security command: {}", e))?;
         if !output.status.success() {
@@ -68,7 +95,9 @@ pub fn retrieve_password() -> Result<String, String> {
             .output()
             .map_err(|e| format!("Failed to run secret-tool: {}", e))?;
         if !output.status.success() {
-            return Err("Password not found in Secret Service. Run `safeagent init` to set up.".into());
+            return Err(
+                "Password not found in Secret Service. Run `safeagent init` to set up.".into(),
+            );
         }
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
@@ -84,7 +113,13 @@ pub fn delete_password() -> Result<(), String> {
     {
         use std::process::Command;
         let status = Command::new("security")
-            .args(["delete-generic-password", "-a", ACCOUNT_NAME, "-s", SERVICE_NAME])
+            .args([
+                "delete-generic-password",
+                "-a",
+                ACCOUNT_NAME,
+                "-s",
+                SERVICE_NAME,
+            ])
             .output()
             .map_err(|e| format!("Failed to run security command: {}", e))?;
         if !status.status.success() {
@@ -114,11 +149,17 @@ pub fn delete_password() -> Result<(), String> {
 pub fn is_available() -> bool {
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("security").arg("help").output().is_ok()
+        std::process::Command::new("security")
+            .arg("help")
+            .output()
+            .is_ok()
     }
     #[cfg(target_os = "linux")]
     {
-        std::process::Command::new("secret-tool").arg("--version").output().is_ok()
+        std::process::Command::new("secret-tool")
+            .arg("--version")
+            .output()
+            .is_ok()
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {

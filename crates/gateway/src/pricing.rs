@@ -1,6 +1,8 @@
 //! Pricing manifest for model costs.
 //! Loaded from pricing.toml, versioned, with signature verification.
 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -30,15 +32,13 @@ impl PricingManifest {
         }
         let content = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read pricing.toml: {}", e))?;
-        toml::from_str(&content)
-            .map_err(|e| format!("Failed to parse pricing.toml: {}", e))
+        toml::from_str(&content).map_err(|e| format!("Failed to parse pricing.toml: {}", e))
     }
 
     pub fn save(&self, path: &Path) -> Result<(), String> {
         let content = toml::to_string_pretty(self)
             .map_err(|e| format!("Failed to serialize pricing: {}", e))?;
-        std::fs::write(path, content)
-            .map_err(|e| format!("Failed to write pricing.toml: {}", e))
+        std::fs::write(path, content).map_err(|e| format!("Failed to write pricing.toml: {}", e))
     }
 
     pub fn get_pricing(&self, model_name: &str) -> Option<&ModelPricing> {
@@ -48,26 +48,44 @@ impl PricingManifest {
     pub fn default_manifest() -> Self {
         let mut models = HashMap::new();
 
-        models.insert("claude-haiku-4-5-20251001".into(), ModelPricing {
-            provider: "anthropic".into(), tier: "economy".into(),
-            input_per_1k_microdollars: 800, output_per_1k_microdollars: 4000,
-            cache_read_per_1k_microdollars: Some(80), cache_write_per_1k_microdollars: Some(1000),
-            max_context_tokens: Some(200_000),
-        });
+        models.insert(
+            "claude-haiku-4-5-20251001".into(),
+            ModelPricing {
+                provider: "anthropic".into(),
+                tier: "economy".into(),
+                input_per_1k_microdollars: 800,
+                output_per_1k_microdollars: 4000,
+                cache_read_per_1k_microdollars: Some(80),
+                cache_write_per_1k_microdollars: Some(1000),
+                max_context_tokens: Some(200_000),
+            },
+        );
 
-        models.insert("claude-sonnet-4-5-20250929".into(), ModelPricing {
-            provider: "anthropic".into(), tier: "standard".into(),
-            input_per_1k_microdollars: 3000, output_per_1k_microdollars: 15000,
-            cache_read_per_1k_microdollars: Some(300), cache_write_per_1k_microdollars: Some(3750),
-            max_context_tokens: Some(200_000),
-        });
+        models.insert(
+            "claude-sonnet-4-5-20250929".into(),
+            ModelPricing {
+                provider: "anthropic".into(),
+                tier: "standard".into(),
+                input_per_1k_microdollars: 3000,
+                output_per_1k_microdollars: 15000,
+                cache_read_per_1k_microdollars: Some(300),
+                cache_write_per_1k_microdollars: Some(3750),
+                max_context_tokens: Some(200_000),
+            },
+        );
 
-        models.insert("claude-opus-4-6".into(), ModelPricing {
-            provider: "anthropic".into(), tier: "premium".into(),
-            input_per_1k_microdollars: 15000, output_per_1k_microdollars: 75000,
-            cache_read_per_1k_microdollars: Some(1500), cache_write_per_1k_microdollars: Some(18750),
-            max_context_tokens: Some(200_000),
-        });
+        models.insert(
+            "claude-opus-4-6".into(),
+            ModelPricing {
+                provider: "anthropic".into(),
+                tier: "premium".into(),
+                input_per_1k_microdollars: 15000,
+                output_per_1k_microdollars: 75000,
+                cache_read_per_1k_microdollars: Some(1500),
+                cache_write_per_1k_microdollars: Some(18750),
+                max_context_tokens: Some(200_000),
+            },
+        );
 
         Self {
             version: "2025.02.1".into(),
@@ -84,8 +102,7 @@ impl PricingManifest {
     /// Verify SHA-256 checksum of pricing file
     pub fn verify_checksum(path: &Path, expected_hex: &str) -> Result<bool, String> {
         use std::io::Read;
-        let mut file = std::fs::File::open(path)
-            .map_err(|e| format!("Cannot open file: {}", e))?;
+        let mut file = std::fs::File::open(path).map_err(|e| format!("Cannot open file: {}", e))?;
         let mut data = Vec::new();
         file.read_to_end(&mut data)
             .map_err(|e| format!("Cannot read file: {}", e))?;
@@ -116,12 +133,21 @@ pub fn run_pricing_command(data_dir: &Path, subcmd: Option<&str>) -> Result<(), 
         Some("show") | None => {
             let manifest = PricingManifest::load(&pricing_path)?;
             println!();
-            println!("  💰 Pricing Manifest v{} ({})", manifest.version, manifest.updated_at);
+            println!(
+                "  💰 Pricing Manifest v{} ({})",
+                manifest.version, manifest.updated_at
+            );
             println!("  ─────────────────────────────────────");
             for (name, p) in &manifest.models {
                 println!("  {} ({})", name, p.tier);
-                println!("    Input:  ${:.4}/1K tokens", p.input_per_1k_microdollars as f64 / 1_000_000.0);
-                println!("    Output: ${:.4}/1K tokens", p.output_per_1k_microdollars as f64 / 1_000_000.0);
+                println!(
+                    "    Input:  ${:.4}/1K tokens",
+                    p.input_per_1k_microdollars as f64 / 1_000_000.0
+                );
+                println!(
+                    "    Output: ${:.4}/1K tokens",
+                    p.output_per_1k_microdollars as f64 / 1_000_000.0
+                );
                 if let Some(cr) = p.cache_read_per_1k_microdollars {
                     println!("    Cache read:  ${:.4}/1K", cr as f64 / 1_000_000.0);
                 }
@@ -147,7 +173,10 @@ pub fn run_pricing_command(data_dir: &Path, subcmd: Option<&str>) -> Result<(), 
             println!("  ✅ pricing.toml updated (v{})", manifest.version);
             Ok(())
         }
-        Some(other) => Err(format!("Unknown pricing subcommand: '{}'. Use: show, generate, update", other)),
+        Some(other) => Err(format!(
+            "Unknown pricing subcommand: '{}'. Use: show, generate, update",
+            other
+        )),
     }
 }
 
@@ -174,8 +203,13 @@ mod tests {
 
     #[test]
     fn test_save_load_roundtrip() {
-        let dir = std::env::temp_dir().join(format!("safeagent_pricing_test_{}", 
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos()));
+        let dir = std::env::temp_dir().join(format!(
+            "safeagent_pricing_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("pricing.toml");
 

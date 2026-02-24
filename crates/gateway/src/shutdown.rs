@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use tokio::signal;
 use tokio::sync::broadcast;
 use tracing::info;
@@ -97,8 +99,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_cleanup() {
-        let dir = std::env::temp_dir().join(format!("safeagent_shutdown_test_{}", 
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos()));
+        let dir = std::env::temp_dir().join(format!(
+            "safeagent_shutdown_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
 
         cleanup(&dir).await;

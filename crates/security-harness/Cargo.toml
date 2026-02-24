@@ -1,0 +1,27 @@
+[package]
+name = "safeagent-security-harness"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "red-team-harness"
+path = "src/red_team.rs"
+
+[[bin]]
+name = "chaos-harness"
+path = "src/chaos.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+clap = { version = "4", features = ["derive"] }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+
+# Security components to test
+safeagent-policy-engine = { path = "../policy-engine" }
+safeagent-capability-tokens = { path = "../capability-tokens" }
+safeagent-audit-log = { path = "../audit-log" }
+safeagent-skills = { path = "../skills" }

@@ -1,5 +1,5 @@
+use crate::google_oauth::{get_valid_token, OAuthTokens};
 use crate::{Permission, Skill, SkillConfig, SkillResult};
-use crate::google_oauth::{OAuthTokens, get_valid_token};
 use async_trait::async_trait;
 use base64::Engine;
 
@@ -29,7 +29,10 @@ impl EmailSenderSkill {
             allowed_recipients: vec![], // deny-all by default
             daily_limit: 20,
             emails_sent_today: std::sync::atomic::AtomicU32::new(0),
-            config: SkillConfig { enabled: false, ..Default::default() }, // disabled by default
+            config: SkillConfig {
+                enabled: false,
+                ..Default::default()
+            }, // disabled by default
         }
     }
 
@@ -99,8 +102,12 @@ impl EmailSenderSkill {
 
 #[async_trait]
 impl Skill for EmailSenderSkill {
-    fn id(&self) -> &str { "email_sender" }
-    fn name(&self) -> &str { "Gmail Sender" }
+    fn id(&self) -> &str {
+        "email_sender"
+    }
+    fn name(&self) -> &str {
+        "Gmail Sender"
+    }
     fn description(&self) -> &str {
         "Send an email via Gmail. Input format:\n\
          to: recipient@example.com\n\
@@ -108,7 +115,9 @@ impl Skill for EmailSenderSkill {
          ---\n\
          Email body here."
     }
-    fn permissions(&self) -> Vec<Permission> { vec![Permission::write_email()] }
+    fn permissions(&self) -> Vec<Permission> {
+        vec![Permission::write_email()]
+    }
 
     async fn execute(&self, input: &str) -> SkillResult {
         if !self.config.enabled {
@@ -116,12 +125,15 @@ impl Skill for EmailSenderSkill {
                 "Email sender is disabled by default. Enable in safeagent.toml:\n\
                  [skills.email_sender]\n\
                  enabled = true\n\
-                 allowed_recipients = [\"*@yourdomain.com\"]".into()
+                 allowed_recipients = [\"*@yourdomain.com\"]"
+                    .into(),
             );
         }
 
         // Check daily limit
-        let count = self.emails_sent_today.load(std::sync::atomic::Ordering::Relaxed);
+        let count = self
+            .emails_sent_today
+            .load(std::sync::atomic::Ordering::Relaxed);
         if count >= self.daily_limit {
             return SkillResult::err(format!(
                 "Daily email limit reached ({}/{}). Resets at midnight.",
@@ -155,11 +167,13 @@ impl Skill for EmailSenderSkill {
             email.to, email.subject, email.body
         );
 
-        let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw_message.as_bytes());
+        let encoded =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw_message.as_bytes());
 
         let body = serde_json::json!({ "raw": encoded });
 
-        let resp = match self.client
+        let resp = match self
+            .client
             .post("https://gmail.googleapis.com/gmail/v1/users/me/messages/send")
             .header("Authorization", format!("Bearer {}", access_token))
             .header("Content-Type", "application/json")
@@ -177,9 +191,12 @@ impl Skill for EmailSenderSkill {
             return SkillResult::err(format!("Gmail API error {}: {}", status, body));
         }
 
-        self.emails_sent_today.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.emails_sent_today
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-        let sent_count = self.emails_sent_today.load(std::sync::atomic::Ordering::Relaxed);
+        let sent_count = self
+            .emails_sent_today
+            .load(std::sync::atomic::Ordering::Relaxed);
         SkillResult::ok(format!(
             "✅ Email sent to {} — \"{}\" ({}/{}  daily limit)",
             email.to, email.subject, sent_count, self.daily_limit
@@ -216,7 +233,9 @@ fn parse_email_input(input: &str) -> Result<ParsedEmail, String> {
 
     for line in headers.lines() {
         let line = line.trim();
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
 
         if let Some((key, value)) = line.split_once(':') {
             let key = key.trim().to_lowercase();
@@ -317,13 +336,18 @@ mod tests {
 
     #[test]
     fn test_daily_limit() {
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = EmailSenderSkill::new("id".into(), "secret".into(), None)
             .with_allowed_recipients(vec!["*@test.com".into()])
             .with_daily_limit(5)
             .with_config(config);
 
-        skill.emails_sent_today.store(5, std::sync::atomic::Ordering::Relaxed);
+        skill
+            .emails_sent_today
+            .store(5, std::sync::atomic::Ordering::Relaxed);
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("to: x@test.com\nsubject: Hi\n---\nBody"));

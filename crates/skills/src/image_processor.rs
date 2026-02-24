@@ -14,7 +14,15 @@ pub struct ImageProcessorSkill {
 }
 
 const ALLOWED_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"];
-const ALLOWED_MIME_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp", "image/svg+xml"];
+#[allow(dead_code)]
+const ALLOWED_MIME_TYPES: &[&str] = &[
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "image/svg+xml",
+];
 
 impl ImageProcessorSkill {
     pub fn new(allowed_dirs: Vec<PathBuf>, openai_api_key: Option<String>) -> Self {
@@ -42,25 +50,36 @@ impl ImageProcessorSkill {
             return Err("Path traversal (..) not allowed".into());
         }
 
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_lowercase();
 
         if !ALLOWED_EXTENSIONS.contains(&ext.as_str()) {
-            return Err(format!("Unsupported image format '.{}'. Allowed: {:?}", ext, ALLOWED_EXTENSIONS));
+            return Err(format!(
+                "Unsupported image format '.{}'. Allowed: {:?}",
+                ext, ALLOWED_EXTENSIONS
+            ));
         }
 
-        let canonical = path.canonicalize()
+        let canonical = path
+            .canonicalize()
             .map_err(|e| format!("Cannot resolve path: {}", e))?;
 
         if !self.allowed_dirs.is_empty() {
             let in_allowlist = self.allowed_dirs.iter().any(|dir| {
-                if let Ok(dir_c) = dir.canonicalize() { canonical.starts_with(&dir_c) }
-                else { canonical.starts_with(dir) }
+                if let Ok(dir_c) = dir.canonicalize() {
+                    canonical.starts_with(&dir_c)
+                } else {
+                    canonical.starts_with(dir)
+                }
             });
             if !in_allowlist {
-                return Err(format!("Path outside allowed directories: {:?}", self.allowed_dirs));
+                return Err(format!(
+                    "Path outside allowed directories: {:?}",
+                    self.allowed_dirs
+                ));
             }
         }
 
@@ -80,19 +99,29 @@ fn parse_image_input(input: &str) -> Result<ImageAction, String> {
     let lower = trimmed.to_lowercase();
 
     if lower.starts_with("info ") {
-        Ok(ImageAction::Info { path: trimmed[5..].trim().into() })
+        Ok(ImageAction::Info {
+            path: trimmed[5..].trim().into(),
+        })
     } else if lower.starts_with("describe ") {
-        Ok(ImageAction::Describe { path: trimmed[9..].trim().into() })
+        Ok(ImageAction::Describe {
+            path: trimmed[9..].trim().into(),
+        })
     } else if lower.starts_with("format ") {
-        Ok(ImageAction::DetectFormat { path: trimmed[7..].trim().into() })
+        Ok(ImageAction::DetectFormat {
+            path: trimmed[7..].trim().into(),
+        })
     } else {
         // Default: info
-        Ok(ImageAction::Info { path: trimmed.into() })
+        Ok(ImageAction::Info {
+            path: trimmed.into(),
+        })
     }
 }
 
 fn detect_format(data: &[u8]) -> &'static str {
-    if data.len() < 4 { return "unknown"; }
+    if data.len() < 4 {
+        return "unknown";
+    }
     match &data[..4] {
         [0x89, 0x50, 0x4E, 0x47] => "PNG",
         [0xFF, 0xD8, 0xFF, _] => "JPEG",
@@ -122,12 +151,18 @@ fn image_dimensions_hint(data: &[u8], format: &str) -> Option<(u32, u32)> {
 
 #[async_trait]
 impl Skill for ImageProcessorSkill {
-    fn id(&self) -> &str { "image_processor" }
-    fn name(&self) -> &str { "Image Processor" }
+    fn id(&self) -> &str {
+        "image_processor"
+    }
+    fn name(&self) -> &str {
+        "Image Processor"
+    }
     fn description(&self) -> &str {
         "Process images. Actions: info <path>, describe <path> (uses Vision API), format <path>. Supports PNG, JPEG, GIF, WebP, BMP, SVG."
     }
-    fn permissions(&self) -> Vec<Permission> { vec![Permission::read_fs(), Permission::read_web()] }
+    fn permissions(&self) -> Vec<Permission> {
+        vec![Permission::read_fs(), Permission::read_web()]
+    }
 
     async fn execute(&self, input: &str) -> SkillResult {
         if !self.config.enabled {
@@ -152,7 +187,11 @@ impl Skill for ImageProcessorSkill {
                 };
 
                 if metadata.len() as usize > self.max_file_size {
-                    return SkillResult::err(format!("File too large: {} bytes (max: {})", metadata.len(), self.max_file_size));
+                    return SkillResult::err(format!(
+                        "File too large: {} bytes (max: {})",
+                        metadata.len(),
+                        self.max_file_size
+                    ));
                 }
 
                 let data = match std::fs::read(&resolved) {
@@ -163,8 +202,12 @@ impl Skill for ImageProcessorSkill {
                 let format = detect_format(&data);
                 let dims = image_dimensions_hint(&data, format);
 
-                let mut info = format!("🖼️ Image Info\n  Path: {}\n  Format: {}\n  Size: {} bytes", 
-                    resolved.display(), format, metadata.len());
+                let mut info = format!(
+                    "🖼️ Image Info\n  Path: {}\n  Format: {}\n  Size: {} bytes",
+                    resolved.display(),
+                    format,
+                    metadata.len()
+                );
 
                 if let Some((w, h)) = dims {
                     info.push_str(&format!("\n  Dimensions: {}x{}", w, h));
@@ -180,7 +223,9 @@ impl Skill for ImageProcessorSkill {
             ImageAction::Describe { path } => {
                 let api_key = match &self.openai_api_key {
                     Some(k) => k.clone(),
-                    None => return SkillResult::err("OpenAI API key not configured for Vision".into()),
+                    None => {
+                        return SkillResult::err("OpenAI API key not configured for Vision".into())
+                    }
                 };
 
                 let resolved = match self.validate_image_path(&path) {
@@ -219,7 +264,8 @@ impl Skill for ImageProcessorSkill {
                     "max_tokens": 500
                 });
 
-                let resp = match self.client
+                let resp = match self
+                    .client
                     .post("https://api.openai.com/v1/chat/completions")
                     .header("Authorization", format!("Bearer {}", api_key))
                     .json(&body)
@@ -238,7 +284,9 @@ impl Skill for ImageProcessorSkill {
 
                 let data: serde_json::Value = match resp.json().await {
                     Ok(d) => d,
-                    Err(e) => return SkillResult::err(format!("Failed to parse Vision response: {}", e)),
+                    Err(e) => {
+                        return SkillResult::err(format!("Failed to parse Vision response: {}", e))
+                    }
                 };
 
                 let description = data["choices"][0]["message"]["content"]
@@ -299,7 +347,10 @@ mod tests {
 
     #[test]
     fn test_disabled() {
-        let config = SkillConfig { enabled: false, ..Default::default() };
+        let config = SkillConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let skill = ImageProcessorSkill::new(vec![], None).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("info /tmp/test.png"));
@@ -309,7 +360,10 @@ mod tests {
 
     #[test]
     fn test_no_vision_key() {
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = ImageProcessorSkill::new(vec![], None).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("describe /tmp/test.png"));

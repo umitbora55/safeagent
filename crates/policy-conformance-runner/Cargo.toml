@@ -1,0 +1,16 @@
+[package]
+name = "safeagent-policy-conformance-runner"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "policy-conformance-runner"
+path = "src/main.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+clap = { version = "4", features = ["derive"] }
+anyhow = { workspace = true }
+safeagent-policy-engine = { path = "../policy-engine" }

@@ -1,0 +1,21 @@
+id: CH-T-002
+name: 'Chaos: shell_executor under allowlist_config_missing'
+threat_ref: T-002
+category: Tampering
+component: shell_executor
+description: 'Test shell_executor resilience when allowlist_config_missing occurs. Related threat: Shell command injection'
+fault_injection:
+  fault_type: allowlist_config_missing
+  target: shell_executor
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: deny_all_behavior
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Tampering
+  impact: critical
+  likelihood: medium

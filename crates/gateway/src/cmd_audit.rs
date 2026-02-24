@@ -12,14 +12,19 @@ pub fn run_audit(data_dir: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let audit = AuditLog::new(audit_path, 30, 200)
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    let audit = AuditLog::new(audit_path, 30, 200).map_err(|e| anyhow::anyhow!("{}", e))?;
 
     let count = audit.entry_count().map_err(|e| anyhow::anyhow!("{}", e))?;
-    let entries = audit.recent_entries(25).map_err(|e| anyhow::anyhow!("{}", e))?;
+    let entries = audit
+        .recent_entries(25)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     println!();
-    println!("  📋 SafeAgent Audit Log ({} total entries, showing last {})", count, entries.len());
+    println!(
+        "  📋 SafeAgent Audit Log ({} total entries, showing last {})",
+        count,
+        entries.len()
+    );
     println!("  ─────────────────────────────────────────────────────────────────────");
     println!();
 
@@ -38,9 +43,18 @@ pub fn run_audit(data_dir: &Path) -> Result<()> {
         };
         let time = e.timestamp.format("%m-%d %H:%M:%S");
 
-        println!("  {} [{}] {} | {} | {} | {}in/{}out | {} | {}ms",
-            status, time, e.event_type, e.model_name, e.platform,
-            e.input_tokens, e.output_tokens, cost_str, e.latency_ms);
+        println!(
+            "  {} [{}] {} | {} | {} | {}in/{}out | {} | {}ms",
+            status,
+            time,
+            e.event_type,
+            e.model_name,
+            e.platform,
+            e.input_tokens,
+            e.output_tokens,
+            cost_str,
+            e.latency_ms
+        );
 
         if let Some(ref err) = e.error_message {
             println!("     └─ {}", err);

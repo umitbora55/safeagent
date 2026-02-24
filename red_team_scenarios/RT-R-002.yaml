@@ -1,0 +1,31 @@
+id: RT-R-002
+name: 'Red Team: Supervisor approval forgery'
+threat_ref: R-002
+category: Repudiation
+component: supervisor
+description: Verify that 'Supervisor approval forgery' is mitigated. Claim approval was given when it was not
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for supervisor component
+- step: 2
+  action: claim_approval_without_evidence
+  input: forge_approval_record
+  description: Attempt claim_approval_without_evidence with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: audit_mismatch_detected'
+assertions:
+- assertion: action_claim_approval_without_evidence_blocked
+  expected_outcome: audit_mismatch_detected
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Repudiation
+  impact: medium
+  likelihood: low
+  mitigations: Audit log with approval/rejection, Timeout auto-rejection

@@ -15,7 +15,10 @@ impl FileWriterSkill {
         Self {
             allowed_dirs,
             allow_overwrite: false, // deny-all default
-            config: SkillConfig { enabled: false, ..Default::default() }, // disabled by default
+            config: SkillConfig {
+                enabled: false,
+                ..Default::default()
+            }, // disabled by default
         }
     }
 
@@ -45,10 +48,12 @@ impl FileWriterSkill {
         };
 
         // For new files, parent must exist and be in allowlist
-        let parent = resolved.parent()
+        let parent = resolved
+            .parent()
             .ok_or("Invalid path: no parent directory")?;
 
-        let parent_canonical = parent.canonicalize()
+        let parent_canonical = parent
+            .canonicalize()
             .map_err(|e| format!("Parent directory does not exist: {}", e))?;
 
         let in_allowlist = self.allowed_dirs.iter().any(|dir| {
@@ -72,12 +77,18 @@ impl FileWriterSkill {
 
 #[async_trait]
 impl Skill for FileWriterSkill {
-    fn id(&self) -> &str { "file_writer" }
-    fn name(&self) -> &str { "File Writer" }
+    fn id(&self) -> &str {
+        "file_writer"
+    }
+    fn name(&self) -> &str {
+        "File Writer"
+    }
     fn description(&self) -> &str {
         "Write content to a file in an allowlisted directory. Input format: 'path/to/file.txt\\n---\\ncontent here'. First line is the path, separator is ---, rest is content."
     }
-    fn permissions(&self) -> Vec<Permission> { vec![Permission::write_fs()] }
+    fn permissions(&self) -> Vec<Permission> {
+        vec![Permission::write_fs()]
+    }
 
     async fn execute(&self, input: &str) -> SkillResult {
         if !self.config.enabled {
@@ -85,7 +96,8 @@ impl Skill for FileWriterSkill {
                 "File writer skill is disabled by default. Enable in safeagent.toml:\n\
                  [skills.file_writer]\n\
                  enabled = true\n\
-                 allowed_dirs = [\"/path/to/dir\"]".into()
+                 allowed_dirs = [\"/path/to/dir\"]"
+                    .into(),
             );
         }
 
@@ -99,7 +111,7 @@ impl Skill for FileWriterSkill {
         let parts: Vec<&str> = input.splitn(2, "\n---\n").collect();
         if parts.len() != 2 {
             return SkillResult::err(
-                "Invalid format. Expected: path/to/file.txt\\n---\\ncontent here".into()
+                "Invalid format. Expected: path/to/file.txt\\n---\\ncontent here".into(),
             );
         }
 
@@ -128,7 +140,8 @@ impl Skill for FileWriterSkill {
         if content.len() > self.config.max_response_bytes {
             return SkillResult::err(format!(
                 "Content too large: {} bytes (max: {} bytes)",
-                content.len(), self.config.max_response_bytes
+                content.len(),
+                self.config.max_response_bytes
             ));
         }
 
@@ -141,7 +154,11 @@ impl Skill for FileWriterSkill {
 
         match std::fs::write(&path, content) {
             Ok(_) => {
-                let action = if path.exists() { "overwritten" } else { "created" };
+                let action = if path.exists() {
+                    "overwritten"
+                } else {
+                    "created"
+                };
                 SkillResult::ok(format!("✅ File {} ({} bytes)", action, content.len()))
                     .with_meta("path", &path.to_string_lossy())
                     .with_meta("size_bytes", &content.len().to_string())
@@ -157,9 +174,13 @@ mod tests {
     use std::fs;
 
     fn setup_test_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("safeagent_filewriter_test_{}",
+        let dir = std::env::temp_dir().join(format!(
+            "safeagent_filewriter_test_{}",
             std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos()));
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
         fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -176,7 +197,10 @@ mod tests {
     #[test]
     fn test_create_file() {
         let dir = setup_test_dir();
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = FileWriterSkill::new(vec![dir.clone()]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -195,7 +219,10 @@ mod tests {
         let existing = dir.join("existing.txt");
         fs::write(&existing, "old content").unwrap();
 
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = FileWriterSkill::new(vec![dir.clone()]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -216,7 +243,10 @@ mod tests {
         let existing = dir.join("overwrite.txt");
         fs::write(&existing, "old").unwrap();
 
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = FileWriterSkill::new(vec![dir.clone()])
             .with_overwrite(true)
             .with_config(config);
@@ -234,7 +264,10 @@ mod tests {
     #[test]
     fn test_outside_allowlist() {
         let dir = setup_test_dir();
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = FileWriterSkill::new(vec![dir.clone()]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -247,7 +280,10 @@ mod tests {
     #[test]
     fn test_path_traversal() {
         let dir = setup_test_dir();
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = FileWriterSkill::new(vec![dir.clone()]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -260,7 +296,10 @@ mod tests {
 
     #[test]
     fn test_invalid_format() {
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = FileWriterSkill::new(vec![PathBuf::from("/tmp")]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -271,7 +310,10 @@ mod tests {
 
     #[test]
     fn test_no_allowed_dirs() {
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = FileWriterSkill::new(vec![]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
 

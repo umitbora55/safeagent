@@ -11,7 +11,10 @@ pub struct TelegramBridge {
 
 impl TelegramBridge {
     pub fn new(bot_token: String, allowed_chats: Vec<String>) -> Self {
-        Self { bot_token, allowed_chats }
+        Self {
+            bot_token,
+            allowed_chats,
+        }
     }
 
     fn api_url(&self, method: &str) -> String {
@@ -131,16 +134,23 @@ impl Bridge for TelegramBridge {
                                         "chat_id": chat_id_str,
                                         "action": "typing",
                                     });
-                                    let _ = client.post(&typing_url).json(&typing_body).send().await;
+                                    let _ =
+                                        client.post(&typing_url).json(&typing_body).send().await;
 
                                     let incoming = IncomingMessage {
                                         id: MessageId(msg.message_id.to_string()),
                                         platform: Platform::Telegram,
                                         chat_id: ChatId(chat_id_str),
                                         sender_id: UserId(
-                                            msg.from.as_ref().map(|u| u.id.to_string()).unwrap_or_default()
+                                            msg.from
+                                                .as_ref()
+                                                .map(|u| u.id.to_string())
+                                                .unwrap_or_default(),
                                         ),
-                                        sender_name: msg.from.as_ref().map(|u| u.first_name.clone()),
+                                        sender_name: msg
+                                            .from
+                                            .as_ref()
+                                            .map(|u| u.first_name.clone()),
                                         content,
                                         timestamp: chrono::Utc::now(),
                                         is_group: msg.chat.r#type != "private",

@@ -1,0 +1,22 @@
+[package]
+name = "safeagent-capability-tokens"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+dashmap = { workspace = true }
+
+# PASETO v4.public
+pasetors = { version = "0.7", features = ["std", "v4"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
+base64 = "0.22"
+
+[dev-dependencies]
+tokio = { workspace = true }

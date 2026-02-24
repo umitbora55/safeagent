@@ -1,0 +1,31 @@
+id: RT-S-002
+name: 'Red Team: Session impersonation'
+threat_ref: S-002
+category: Spoofing
+component: capability-tokens
+description: Verify that 'Session impersonation' is mitigated. Attacker replays a valid token to impersonate another user
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for capability-tokens component
+- step: 2
+  action: replay_token
+  input: previously_used_valid_token
+  description: Attempt replay_token with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: replay_detected'
+assertions:
+- assertion: action_replay_token_blocked
+  expected_outcome: replay_detected
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Spoofing
+  impact: high
+  likelihood: medium
+  mitigations: Nonce-based replay prevention, Token TTL (max 5 minutes)

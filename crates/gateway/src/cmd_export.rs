@@ -13,9 +13,9 @@ pub fn run_export(data_dir: &Path) -> Result<()> {
     }
 
     let memory = MemoryStore::new(memory_path)?;
-    let messages = memory.recent_messages(
-        &safeagent_bridge_common::ChatId("cli_main".into()), 1000
-    ).unwrap_or_default();
+    let messages = memory
+        .recent_messages(&safeagent_bridge_common::ChatId("cli_main".into()), 1000)
+        .unwrap_or_default();
 
     if messages.is_empty() {
         println!();
@@ -30,7 +30,10 @@ pub fn run_export(data_dir: &Path) -> Result<()> {
     let md_path = data_dir.join("export_conversation.md");
     let mut md = String::new();
     md.push_str("# SafeAgent Conversation Export\n\n");
-    md.push_str(&format!("Exported: {}\n\n", chrono::Utc::now().format("%Y-%m-%d %H:%M UTC")));
+    md.push_str(&format!(
+        "Exported: {}\n\n",
+        chrono::Utc::now().format("%Y-%m-%d %H:%M UTC")
+    ));
     md.push_str(&format!("Messages: {}\n\n", messages.len()));
     md.push_str("---\n\n");
 
@@ -50,23 +53,29 @@ pub fn run_export(data_dir: &Path) -> Result<()> {
             safeagent_memory::Role::System => "⚙️ **System**",
         };
         let time = msg.timestamp.format("%H:%M:%S");
-        md.push_str(&format!("### {} ({})\n\n{}\n\n", role_icon, time, msg.content));
+        md.push_str(&format!(
+            "### {} ({})\n\n{}\n\n",
+            role_icon, time, msg.content
+        ));
     }
 
     std::fs::write(&md_path, &md)?;
 
     // Export as JSON
     let json_path = data_dir.join("export_conversation.json");
-    let json_messages: Vec<serde_json::Value> = messages.iter().map(|m| {
-        serde_json::json!({
-            "id": m.id.0,
-            "role": m.role.as_str(),
-            "content": m.content,
-            "platform": format!("{:?}", m.platform),
-            "timestamp": m.timestamp.to_rfc3339(),
-            "token_count": m.token_count,
+    let json_messages: Vec<serde_json::Value> = messages
+        .iter()
+        .map(|m| {
+            serde_json::json!({
+                "id": m.id.0,
+                "role": m.role.as_str(),
+                "content": m.content,
+                "platform": format!("{:?}", m.platform),
+                "timestamp": m.timestamp.to_rfc3339(),
+                "token_count": m.token_count,
+            })
         })
-    }).collect();
+        .collect();
 
     let json_export = serde_json::json!({
         "exported_at": chrono::Utc::now().to_rfc3339(),

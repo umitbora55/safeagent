@@ -12,3 +12,14 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 regex = "1"
+sha2 = "0.10"
+hex = "0.4"
+uuid = { workspace = true }
+
+[[bin]]
+name = "audit_verify"
+path = "src/bin/audit_verify.rs"
+
+[[bin]]
+name = "audit_fixture"
+path = "src/bin/audit_fixture.rs"

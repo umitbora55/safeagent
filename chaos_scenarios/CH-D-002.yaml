@@ -1,0 +1,21 @@
+id: CH-D-002
+name: 'Chaos: capability-tokens under memory_pressure'
+threat_ref: D-002
+category: Denial of Service
+component: capability-tokens
+description: 'Test capability-tokens resilience when memory_pressure occurs. Related threat: Nonce cache exhaustion'
+fault_injection:
+  fault_type: memory_pressure
+  target: capability-tokens
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: graceful_degradation
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Denial of Service
+  impact: medium
+  likelihood: low

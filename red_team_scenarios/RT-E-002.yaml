@@ -1,0 +1,31 @@
+id: RT-E-002
+name: 'Red Team: Scope escalation via wildcard'
+threat_ref: E-002
+category: Elevation of Privilege
+component: capability-tokens
+description: Verify that 'Scope escalation via wildcard' is mitigated. User obtains token with broader scope than authorized
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for capability-tokens component
+- step: 2
+  action: request_wildcard_scope
+  input: scope=*
+  description: Attempt request_wildcard_scope with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: scope_denied_or_audited'
+assertions:
+- assertion: action_request_wildcard_scope_blocked
+  expected_outcome: scope_denied_or_audited
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Elevation of Privilege
+  impact: high
+  likelihood: low
+  mitigations: Scope validation at generation, Server-side scope enforcement

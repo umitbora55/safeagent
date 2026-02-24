@@ -1,0 +1,21 @@
+id: CH-R-002
+name: 'Chaos: supervisor under supervisor_process_crash'
+threat_ref: R-002
+category: Repudiation
+component: supervisor
+description: 'Test supervisor resilience when supervisor_process_crash occurs. Related threat: Supervisor approval forgery'
+fault_injection:
+  fault_type: supervisor_process_crash
+  target: supervisor
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: timeout_rejection
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Repudiation
+  impact: medium
+  likelihood: low

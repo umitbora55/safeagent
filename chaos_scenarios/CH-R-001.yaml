@@ -1,0 +1,21 @@
+id: CH-R-001
+name: 'Chaos: audit-log under storage_unavailable'
+threat_ref: R-001
+category: Repudiation
+component: audit-log
+description: 'Test audit-log resilience when storage_unavailable occurs. Related threat: Audit log deletion'
+fault_injection:
+  fault_type: storage_unavailable
+  target: audit-log
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: buffered_or_failed_safely
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Repudiation
+  impact: high
+  likelihood: low

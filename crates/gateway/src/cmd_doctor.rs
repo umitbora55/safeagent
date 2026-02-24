@@ -56,7 +56,10 @@ pub async fn run_doctor(data_dir: &Path) -> Result<()> {
                     Ok(()) => {
                         let creds = vault.list().unwrap_or_default();
                         let keys: Vec<&str> = creds.iter().map(|c| c.key.as_str()).collect();
-                        println!("        ✅ Vault unlocked ({} credentials stored)", creds.len());
+                        println!(
+                            "        ✅ Vault unlocked ({} credentials stored)",
+                            creds.len()
+                        );
 
                         // Check each expected key
                         let expected = [
@@ -83,7 +86,9 @@ pub async fn run_doctor(data_dir: &Path) -> Result<()> {
                     }
                     Err(_) => {
                         println!("        ❌ Wrong password");
-                        println!("        Fix: Try again or delete vault.db and run `safeagent init`");
+                        println!(
+                            "        Fix: Try again or delete vault.db and run `safeagent init`"
+                        );
                         failed += 1;
                     }
                 }
@@ -102,7 +107,9 @@ pub async fn run_doctor(data_dir: &Path) -> Result<()> {
     print!("  [4/7] Memory database... ");
     io::stdout().flush()?;
     if memory_path.exists() {
-        let size = std::fs::metadata(&memory_path).map(|m| m.len()).unwrap_or(0);
+        let size = std::fs::metadata(&memory_path)
+            .map(|m| m.len())
+            .unwrap_or(0);
         println!("✅ {} ({} bytes)", memory_path.display(), size);
         passed += 1;
     } else {
@@ -166,7 +173,10 @@ pub async fn run_doctor(data_dir: &Path) -> Result<()> {
                     .map(|m| m.permissions().mode() & 0o777)
                     .unwrap_or(0);
                 if mode & 0o077 != 0 {
-                    perm_issues.push(format!("{} is world/group readable (mode {:o})", name, mode));
+                    perm_issues.push(format!(
+                        "{} is world/group readable (mode {:o})",
+                        name, mode
+                    ));
                 }
             }
         }

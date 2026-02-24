@@ -1,0 +1,31 @@
+id: RT-S-001
+name: 'Red Team: Capability token forgery'
+threat_ref: S-001
+category: Spoofing
+component: capability-tokens
+description: Verify that 'Capability token forgery' is mitigated. Attacker attempts to forge a capability token to bypass authorization
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for capability-tokens component
+- step: 2
+  action: forge_token
+  input: modified_payload_with_fake_signature
+  description: Attempt forge_token with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: verification_failed'
+assertions:
+- assertion: action_forge_token_blocked
+  expected_outcome: verification_failed
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Spoofing
+  impact: high
+  likelihood: medium
+  mitigations: Ed25519 signatures (PASETO v4.public), Server-side key management

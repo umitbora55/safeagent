@@ -1,0 +1,31 @@
+id: RT-D-002
+name: 'Red Team: Nonce cache exhaustion'
+threat_ref: D-002
+category: Denial of Service
+component: capability-tokens
+description: Verify that 'Nonce cache exhaustion' is mitigated. Attacker floods with tokens to exhaust nonce cache
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for capability-tokens component
+- step: 2
+  action: flood_tokens
+  input: 10000_unique_tokens
+  description: Attempt flood_tokens with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: cleanup_triggered'
+assertions:
+- assertion: action_flood_tokens_blocked
+  expected_outcome: cleanup_triggered
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Denial of Service
+  impact: medium
+  likelihood: low
+  mitigations: Periodic cache cleanup, TTL-based expiration

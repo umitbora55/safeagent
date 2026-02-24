@@ -1,4 +1,4 @@
-use crate::{Permission, Skill, SkillConfig, SkillResult, validate_url};
+use crate::{validate_url, Permission, Skill, SkillConfig, SkillResult};
 use async_trait::async_trait;
 
 /// Fetch and summarize web pages.
@@ -25,14 +25,26 @@ impl UrlFetcherSkill {
     }
 }
 
+impl Default for UrlFetcherSkill {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl Skill for UrlFetcherSkill {
-    fn id(&self) -> &str { "url_fetcher" }
-    fn name(&self) -> &str { "URL Fetcher" }
+    fn id(&self) -> &str {
+        "url_fetcher"
+    }
+    fn name(&self) -> &str {
+        "URL Fetcher"
+    }
     fn description(&self) -> &str {
         "Fetch a web page and extract its text content. Input: a URL. Returns: extracted text from the page, truncated to max response size."
     }
-    fn permissions(&self) -> Vec<Permission> { vec![Permission::read_web()] }
+    fn permissions(&self) -> Vec<Permission> {
+        vec![Permission::read_web()]
+    }
 
     async fn execute(&self, input: &str) -> SkillResult {
         if !self.config.enabled {
@@ -49,7 +61,8 @@ impl Skill for UrlFetcherSkill {
             return SkillResult::err(format!("URL blocked: {}", e));
         }
 
-        let resp = match self.client
+        let resp = match self
+            .client
             .get(url)
             .header("User-Agent", "SafeAgent/0.1 (URL Fetcher)")
             .send()
@@ -65,13 +78,20 @@ impl Skill for UrlFetcherSkill {
         }
 
         // Check content type
-        let content_type = resp.headers()
+        let content_type = resp
+            .headers()
             .get("content-type")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("")
             .to_lowercase();
 
-        let allowed_types = ["text/html", "text/plain", "application/json", "text/xml", "application/xml"];
+        let allowed_types = [
+            "text/html",
+            "text/plain",
+            "application/json",
+            "text/xml",
+            "application/xml",
+        ];
         if !allowed_types.iter().any(|t| content_type.contains(t)) {
             return SkillResult::err(format!(
                 "Content type '{}' not allowed. Only text/html, text/plain, application/json supported.", content_type
@@ -87,9 +107,13 @@ impl Skill for UrlFetcherSkill {
         if body.len() > self.config.max_response_bytes {
             let truncated = &body[..self.config.max_response_bytes];
             let text = extract_text(truncated);
-            return SkillResult::ok(format!("{}\n\n[Truncated — original size: {} bytes]", text, body.len()))
-                .with_meta("url", url)
-                .with_meta("truncated", "true");
+            return SkillResult::ok(format!(
+                "{}\n\n[Truncated — original size: {} bytes]",
+                text,
+                body.len()
+            ))
+            .with_meta("url", url)
+            .with_meta("truncated", "true");
         }
 
         let text = extract_text(&body);
@@ -119,25 +143,37 @@ fn extract_text(html: &str) -> String {
 
     let mut i = 0;
     while i < chars.len() {
-        if !in_tag && i + 7 < lower_chars.len() && lower_chars[i..i+7].iter().collect::<String>() == "<script" {
+        if !in_tag
+            && i + 7 < lower_chars.len()
+            && lower_chars[i..i + 7].iter().collect::<String>() == "<script"
+        {
             in_script = true;
             in_tag = true;
             i += 1;
             continue;
         }
-        if in_script && i + 9 <= lower_chars.len() && lower_chars[i..i+9].iter().collect::<String>() == "</script>" {
+        if in_script
+            && i + 9 <= lower_chars.len()
+            && lower_chars[i..i + 9].iter().collect::<String>() == "</script>"
+        {
             in_script = false;
             in_tag = false;
             i += 9;
             continue;
         }
-        if !in_tag && i + 6 < lower_chars.len() && lower_chars[i..i+6].iter().collect::<String>() == "<style" {
+        if !in_tag
+            && i + 6 < lower_chars.len()
+            && lower_chars[i..i + 6].iter().collect::<String>() == "<style"
+        {
             in_style = true;
             in_tag = true;
             i += 1;
             continue;
         }
-        if in_style && i + 8 <= lower_chars.len() && lower_chars[i..i+8].iter().collect::<String>() == "</style>" {
+        if in_style
+            && i + 8 <= lower_chars.len()
+            && lower_chars[i..i + 8].iter().collect::<String>() == "</style>"
+        {
             in_style = false;
             in_tag = false;
             i += 8;
@@ -253,7 +289,10 @@ mod tests {
 
     #[test]
     fn test_disabled() {
-        let config = SkillConfig { enabled: false, ..Default::default() };
+        let config = SkillConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let skill = UrlFetcherSkill::new().with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("https://example.com"));

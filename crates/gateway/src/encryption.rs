@@ -2,53 +2,58 @@
 //! Uses AES-256-GCM with per-record nonces.
 //! Master key derived from vault password via Argon2id.
 
+#![allow(dead_code)]
+
+use aes_gcm::aead::generic_array::GenericArray;
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
 };
-use aes_gcm::aead::generic_array::GenericArray;
+use argon2::{Algorithm, Argon2, Params, Version};
 
 const NONCE_SIZE: usize = 12;
+const SALT_SIZE: usize = 16;
+
+// Argon2id parameters (matching credential-vault)
+const ARGON2_M_COST: u32 = 65536; // 64 MiB
+const ARGON2_T_COST: u32 = 3; // 3 iterations
+const ARGON2_P_COST: u32 = 4; // 4 parallelism
+const ARGON2_OUTPUT_LEN: usize = 32;
 
 /// Encrypts/decrypts data using AES-256-GCM.
 pub struct DataEncryptor {
     cipher: Aes256Gcm,
+    salt: [u8; SALT_SIZE],
 }
 
 impl DataEncryptor {
     /// Create from a 32-byte key (from Argon2id derivation).
-    pub fn new(key: &[u8; 32]) -> Self {
+    pub fn new(key: &[u8; 32], salt: [u8; SALT_SIZE]) -> Self {
         let key = GenericArray::from_slice(key);
         Self {
             cipher: Aes256Gcm::new(key),
+            salt,
         }
     }
 
-    /// Derive a 32-byte key from password using simple SHA-256.
-    /// In production, use Argon2id (already in credential-vault).
+    /// Derive a 32-byte key from password using Argon2id.
+    /// Generates a new random salt.
     pub fn from_password(password: &str) -> Self {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        let salt = rand_salt();
+        Self::from_password_with_salt(password, salt)
+    }
 
-        // Simple key derivation (credential-vault uses Argon2id for real keys)
-        let mut key = [0u8; 32];
-        let bytes = password.as_bytes();
-        for (i, &b) in bytes.iter().enumerate() {
-            key[i % 32] ^= b;
-            key[(i + 7) % 32] = key[(i + 7) % 32].wrapping_add(b);
-            key[(i + 13) % 32] = key[(i + 13) % 32].wrapping_mul(b | 1);
-        }
-        // Extra mixing
-        let mut hasher = DefaultHasher::new();
-        key.hash(&mut hasher);
-        let hash = hasher.finish().to_le_bytes();
-        for i in 0..8 {
-            key[i] ^= hash[i];
-            key[i + 8] ^= hash[i];
-            key[i + 16] ^= hash[7 - i];
-            key[i + 24] ^= hash[7 - i];
-        }
-        Self::new(&key)
+    /// Derive key from password with a specific salt.
+    /// Use this when loading existing encrypted data.
+    pub fn from_password_with_salt(password: &str, salt: [u8; SALT_SIZE]) -> Self {
+        let key = derive_key_argon2id(password, &salt);
+        Self::new(&key, salt)
+    }
+
+    /// Get the salt used for key derivation.
+    /// Store this alongside encrypted data to enable decryption.
+    pub fn salt(&self) -> &[u8; SALT_SIZE] {
+        &self.salt
     }
 
     /// Encrypt data. Returns nonce || ciphertext.
@@ -56,7 +61,8 @@ impl DataEncryptor {
         let nonce_bytes: [u8; NONCE_SIZE] = rand_nonce();
         let nonce = Nonce::from_slice(&nonce_bytes);
 
-        let ciphertext = self.cipher
+        let ciphertext = self
+            .cipher
             .encrypt(nonce, plaintext)
             .map_err(|e| format!("Encryption failed: {}", e))?;
 
@@ -92,6 +98,50 @@ impl DataEncryptor {
         let plaintext = self.decrypt(&data)?;
         String::from_utf8(plaintext).map_err(|e| format!("Invalid UTF-8: {}", e))
     }
+
+    /// Encrypt with salt prefix: salt || nonce || ciphertext (for storage).
+    pub fn encrypt_with_salt(&self, plaintext: &[u8]) -> Result<Vec<u8>, String> {
+        let encrypted = self.encrypt(plaintext)?;
+        let mut output = Vec::with_capacity(SALT_SIZE + encrypted.len());
+        output.extend_from_slice(&self.salt);
+        output.extend_from_slice(&encrypted);
+        Ok(output)
+    }
+
+    /// Decrypt data that includes salt prefix.
+    /// Returns (salt, plaintext) for verification.
+    pub fn decrypt_with_salt(password: &str, data: &[u8]) -> Result<Vec<u8>, String> {
+        if data.len() < SALT_SIZE + NONCE_SIZE + 16 {
+            return Err("Data too short (missing salt or ciphertext)".into());
+        }
+
+        let (salt_bytes, encrypted) = data.split_at(SALT_SIZE);
+        let mut salt = [0u8; SALT_SIZE];
+        salt.copy_from_slice(salt_bytes);
+
+        let encryptor = Self::from_password_with_salt(password, salt);
+        encryptor.decrypt(encrypted)
+    }
+}
+
+/// Derive a 32-byte key using Argon2id.
+fn derive_key_argon2id(password: &str, salt: &[u8]) -> [u8; 32] {
+    let params = Params::new(
+        ARGON2_M_COST,
+        ARGON2_T_COST,
+        ARGON2_P_COST,
+        Some(ARGON2_OUTPUT_LEN),
+    )
+    .expect("valid Argon2 params");
+
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+
+    let mut key = [0u8; 32];
+    argon2
+        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .expect("Argon2id hash should succeed");
+
+    key
 }
 
 fn rand_nonce() -> [u8; NONCE_SIZE] {
@@ -99,6 +149,13 @@ fn rand_nonce() -> [u8; NONCE_SIZE] {
     let mut nonce = [0u8; NONCE_SIZE];
     OsRng.fill_bytes(&mut nonce);
     nonce
+}
+
+fn rand_salt() -> [u8; SALT_SIZE] {
+    use aes_gcm::aead::rand_core::RngCore;
+    let mut salt = [0u8; SALT_SIZE];
+    OsRng.fill_bytes(&mut salt);
+    salt
 }
 
 fn base64_encode(data: &[u8]) -> String {
@@ -145,6 +202,27 @@ mod tests {
     }
 
     #[test]
+    fn test_same_password_different_salt_fail() {
+        let enc1 = DataEncryptor::from_password("same-password");
+        let enc2 = DataEncryptor::from_password("same-password");
+        // Different random salts
+        assert_ne!(enc1.salt(), enc2.salt());
+        let encrypted = enc1.encrypt(b"secret").unwrap();
+        // Cannot decrypt with different salt-derived key
+        assert!(enc2.decrypt(&encrypted).is_err());
+    }
+
+    #[test]
+    fn test_same_password_same_salt_works() {
+        let enc1 = DataEncryptor::from_password("test-password");
+        let salt = *enc1.salt();
+        let enc2 = DataEncryptor::from_password_with_salt("test-password", salt);
+        let encrypted = enc1.encrypt(b"secret").unwrap();
+        let decrypted = enc2.decrypt(&encrypted).unwrap();
+        assert_eq!(decrypted, b"secret");
+    }
+
+    #[test]
     fn test_empty_data() {
         let enc = DataEncryptor::from_password("pass");
         let encrypted = enc.encrypt(b"").unwrap();
@@ -184,5 +262,56 @@ mod tests {
     fn test_too_short_data() {
         let enc = DataEncryptor::from_password("pass");
         assert!(enc.decrypt(&[0u8; 10]).is_err());
+    }
+
+    #[test]
+    fn test_encrypt_with_salt_roundtrip() {
+        let password = "my-secure-password";
+        let enc = DataEncryptor::from_password(password);
+        let plaintext = b"API key: sk-ant-12345";
+
+        // Encrypt with salt prefix
+        let encrypted = enc.encrypt_with_salt(plaintext).unwrap();
+
+        // Verify salt is prepended
+        assert!(encrypted.len() > SALT_SIZE + NONCE_SIZE + 16);
+
+        // Decrypt using static method (extracts salt from data)
+        let decrypted = DataEncryptor::decrypt_with_salt(password, &encrypted).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_decrypt_with_salt_wrong_password() {
+        let enc = DataEncryptor::from_password("correct-password");
+        let encrypted = enc.encrypt_with_salt(b"secret").unwrap();
+
+        let result = DataEncryptor::decrypt_with_salt("wrong-password", &encrypted);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_argon2id_key_derivation_deterministic() {
+        let password = "test123";
+        let salt = [1u8; SALT_SIZE];
+
+        let key1 = derive_key_argon2id(password, &salt);
+        let key2 = derive_key_argon2id(password, &salt);
+
+        // Same password + same salt = same key
+        assert_eq!(key1, key2);
+
+        // Different salt = different key
+        let salt2 = [2u8; SALT_SIZE];
+        let key3 = derive_key_argon2id(password, &salt2);
+        assert_ne!(key1, key3);
+    }
+
+    #[test]
+    fn test_salt_is_random() {
+        let salt1 = rand_salt();
+        let salt2 = rand_salt();
+        // Extremely unlikely to be equal
+        assert_ne!(salt1, salt2);
     }
 }

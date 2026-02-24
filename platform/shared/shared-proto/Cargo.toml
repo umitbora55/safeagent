@@ -1,0 +1,11 @@
+[package]
+name = "safeagent-shared-proto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+safeagent-shared-identity = { path = "../shared-identity" }
+safeagent-shared-errors = { path = "../shared-errors" }

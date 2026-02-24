@@ -91,12 +91,25 @@ pub struct IncomingMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MessageContent {
-    Text { text: String },
-    Voice { audio_url: String, duration_secs: Option<u32> },
-    Image { image_url: String, caption: Option<String> },
-    File { file_url: String, filename: String },
+    Text {
+        text: String,
+    },
+    Voice {
+        audio_url: String,
+        duration_secs: Option<u32>,
+    },
+    Image {
+        image_url: String,
+        caption: Option<String>,
+    },
+    File {
+        file_url: String,
+        filename: String,
+    },
     /// Platform-specific content not yet modeled
-    Unknown { raw: serde_json::Value },
+    Unknown {
+        raw: serde_json::Value,
+    },
 }
 
 impl MessageContent {
@@ -169,8 +182,12 @@ impl Default for BridgeCapabilities {
 /// Split a message into chunks that fit within the platform's max message length.
 /// Splits at newline boundaries when possible, falls back to character boundary.
 pub fn chunk_message(text: &str, max_len: usize) -> Vec<String> {
-    if max_len == 0 { return vec![text.to_string()]; }
-    if text.len() <= max_len { return vec![text.to_string()]; }
+    if max_len == 0 {
+        return vec![text.to_string()];
+    }
+    if text.len() <= max_len {
+        return vec![text.to_string()];
+    }
 
     let mut chunks = Vec::new();
     let mut remaining = text;
@@ -183,7 +200,8 @@ pub fn chunk_message(text: &str, max_len: usize) -> Vec<String> {
 
         // Try to split at last newline within max_len
         let slice = &remaining[..max_len];
-        let split_at = slice.rfind('\n')
+        let split_at = slice
+            .rfind('\n')
             .map(|i| i + 1)
             .or_else(|| slice.rfind(' ').map(|i| i + 1))
             .unwrap_or(max_len);

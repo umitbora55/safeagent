@@ -1,6 +1,6 @@
 // chrono::Datelike not needed here
+use crate::google_oauth::{get_valid_token, OAuthTokens};
 use crate::{Permission, Skill, SkillConfig, SkillResult};
-use crate::google_oauth::{OAuthTokens, get_valid_token};
 use async_trait::async_trait;
 
 /// Create events in Google Calendar.
@@ -27,7 +27,10 @@ impl CalendarWriterSkill {
             tokens: tokio::sync::RwLock::new(tokens),
             daily_limit: 10,
             events_created_today: std::sync::atomic::AtomicU32::new(0),
-            config: SkillConfig { enabled: false, ..Default::default() }, // disabled by default
+            config: SkillConfig {
+                enabled: false,
+                ..Default::default()
+            }, // disabled by default
         }
     }
 
@@ -48,7 +51,8 @@ impl CalendarWriterSkill {
 
     async fn get_access_token(&self) -> Result<String, String> {
         let current = self.tokens.read().await.clone();
-        let current = current.ok_or("Google Calendar not authorized. Run `safeagent init` to connect.")?;
+        let current =
+            current.ok_or("Google Calendar not authorized. Run `safeagent init` to connect.")?;
 
         let refreshed = get_valid_token(&self.client_id, &self.client_secret, &current).await?;
         let access_token = refreshed.access_token.clone();
@@ -64,8 +68,12 @@ impl CalendarWriterSkill {
 
 #[async_trait]
 impl Skill for CalendarWriterSkill {
-    fn id(&self) -> &str { "calendar_writer" }
-    fn name(&self) -> &str { "Google Calendar Writer" }
+    fn id(&self) -> &str {
+        "calendar_writer"
+    }
+    fn name(&self) -> &str {
+        "Google Calendar Writer"
+    }
     fn description(&self) -> &str {
         "Create an event in Google Calendar. Input format:\n\
          title: Meeting with Bob\n\
@@ -75,19 +83,24 @@ impl Skill for CalendarWriterSkill {
          location: Office (optional)\n\
          description: Discuss Q1 results (optional)"
     }
-    fn permissions(&self) -> Vec<Permission> { vec![Permission("write:calendar".into())] }
+    fn permissions(&self) -> Vec<Permission> {
+        vec![Permission("write:calendar".into())]
+    }
 
     async fn execute(&self, input: &str) -> SkillResult {
         if !self.config.enabled {
             return SkillResult::err(
                 "Calendar writer is disabled by default. Enable in safeagent.toml:\n\
                  [skills.calendar_writer]\n\
-                 enabled = true".into()
+                 enabled = true"
+                    .into(),
             );
         }
 
         // Check daily limit
-        let count = self.events_created_today.load(std::sync::atomic::Ordering::Relaxed);
+        let count = self
+            .events_created_today
+            .load(std::sync::atomic::Ordering::Relaxed);
         if count >= self.daily_limit {
             return SkillResult::err(format!(
                 "Daily event creation limit reached ({}/{}). Resets at midnight.",
@@ -121,7 +134,8 @@ impl Skill for CalendarWriterSkill {
             }
         });
 
-        let resp = match self.client
+        let resp = match self
+            .client
             .post("https://www.googleapis.com/calendar/v3/calendars/primary/events")
             .header("Authorization", format!("Bearer {}", access_token))
             .header("Content-Type", "application/json")
@@ -144,7 +158,8 @@ impl Skill for CalendarWriterSkill {
             Err(e) => return SkillResult::err(format!("Failed to parse response: {}", e)),
         };
 
-        self.events_created_today.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.events_created_today
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         let event_link = data["htmlLink"].as_str().unwrap_or("");
         SkillResult::ok(format!(
@@ -176,7 +191,9 @@ fn parse_event_input(input: &str) -> Result<ParsedEvent, String> {
 
     for line in input.lines() {
         let line = line.trim();
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
 
         if let Some((key, value)) = line.split_once(':') {
             let key = key.trim().to_lowercase();
@@ -201,18 +218,34 @@ fn parse_event_input(input: &str) -> Result<ParsedEvent, String> {
 
     // Validate date format
     if chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").is_err() {
-        return Err(format!("Invalid date '{}'. Expected format: YYYY-MM-DD", date));
+        return Err(format!(
+            "Invalid date '{}'. Expected format: YYYY-MM-DD",
+            date
+        ));
     }
 
     // Validate time format
     if chrono::NaiveTime::parse_from_str(&start_time, "%H:%M").is_err() {
-        return Err(format!("Invalid start time '{}'. Expected format: HH:MM", start_time));
+        return Err(format!(
+            "Invalid start time '{}'. Expected format: HH:MM",
+            start_time
+        ));
     }
     if chrono::NaiveTime::parse_from_str(&end_time, "%H:%M").is_err() {
-        return Err(format!("Invalid end time '{}'. Expected format: HH:MM", end_time));
+        return Err(format!(
+            "Invalid end time '{}'. Expected format: HH:MM",
+            end_time
+        ));
     }
 
-    Ok(ParsedEvent { title, date, start_time, end_time, location, description })
+    Ok(ParsedEvent {
+        title,
+        date,
+        start_time,
+        end_time,
+        location,
+        description,
+    })
 }
 
 #[cfg(test)]
@@ -221,7 +254,8 @@ mod tests {
 
     #[test]
     fn test_parse_event_valid() {
-        let input = "title: Team Meeting\ndate: 2025-03-20\nstart: 14:00\nend: 15:30\nlocation: Room A";
+        let input =
+            "title: Team Meeting\ndate: 2025-03-20\nstart: 14:00\nend: 15:30\nlocation: Room A";
         let event = parse_event_input(input).unwrap();
         assert_eq!(event.title, "Team Meeting");
         assert_eq!(event.date, "2025-03-20");
@@ -232,7 +266,8 @@ mod tests {
 
     #[test]
     fn test_parse_event_turkish() {
-        let input = "başlık: Toplantı\ntarih: 2025-04-01\nbaşlangıç: 09:00\nbitiş: 10:00\nkonum: Ofis";
+        let input =
+            "başlık: Toplantı\ntarih: 2025-04-01\nbaşlangıç: 09:00\nbitiş: 10:00\nkonum: Ofis";
         let event = parse_event_input(input).unwrap();
         assert_eq!(event.title, "Toplantı");
         assert_eq!(event.location.unwrap(), "Ofis");
@@ -266,23 +301,30 @@ mod tests {
     fn test_disabled_by_default() {
         let skill = CalendarWriterSkill::new("id".into(), "secret".into(), None);
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(skill.execute("title: Test\ndate: 2025-03-20\nstart: 14:00\nend: 15:00"));
+        let result =
+            rt.block_on(skill.execute("title: Test\ndate: 2025-03-20\nstart: 14:00\nend: 15:00"));
         assert!(!result.success);
         assert!(result.output.contains("disabled"));
     }
 
     #[test]
     fn test_daily_limit() {
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = CalendarWriterSkill::new("id".into(), "secret".into(), None)
             .with_daily_limit(2)
             .with_config(config);
 
         // Simulate hitting the limit
-        skill.events_created_today.store(2, std::sync::atomic::Ordering::Relaxed);
+        skill
+            .events_created_today
+            .store(2, std::sync::atomic::Ordering::Relaxed);
 
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(skill.execute("title: Test\ndate: 2025-03-20\nstart: 14:00\nend: 15:00"));
+        let result =
+            rt.block_on(skill.execute("title: Test\ndate: 2025-03-20\nstart: 14:00\nend: 15:00"));
         assert!(!result.success);
         assert!(result.output.contains("limit reached"));
     }

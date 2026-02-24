@@ -24,7 +24,10 @@ pub struct GeneralConfig {
 
 impl Default for GeneralConfig {
     fn default() -> Self {
-        Self { log_level: "info".into(), data_dir: None }
+        Self {
+            log_level: "info".into(),
+            data_dir: None,
+        }
     }
 }
 
@@ -45,18 +48,12 @@ impl Default for RouterConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LimitsConfig {
     /// Daily spend limit in USD (e.g. 5.0 = $5)
     pub daily_spend_usd: Option<f64>,
     /// Monthly spend limit in USD
     pub monthly_spend_usd: Option<f64>,
-}
-
-impl Default for LimitsConfig {
-    fn default() -> Self {
-        Self { daily_spend_usd: None, monthly_spend_usd: None }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -136,7 +133,11 @@ pub struct FileReaderEntry {
 
 impl Default for FileReaderEntry {
     fn default() -> Self {
-        Self { enabled: false, allowed_dirs: vec![], max_response_bytes: 1_048_576 }
+        Self {
+            enabled: false,
+            allowed_dirs: vec![],
+            max_response_bytes: 1_048_576,
+        }
     }
 }
 
@@ -154,7 +155,12 @@ pub struct FileWriterEntry {
 
 impl Default for FileWriterEntry {
     fn default() -> Self {
-        Self { enabled: false, allowed_dirs: vec![], allow_overwrite: false, max_response_bytes: 1_048_576 }
+        Self {
+            enabled: false,
+            allowed_dirs: vec![],
+            allow_overwrite: false,
+            max_response_bytes: 1_048_576,
+        }
     }
 }
 
@@ -168,7 +174,10 @@ pub struct CalendarWriterEntry {
 
 impl Default for CalendarWriterEntry {
     fn default() -> Self {
-        Self { enabled: false, daily_limit: 10 }
+        Self {
+            enabled: false,
+            daily_limit: 10,
+        }
     }
 }
 
@@ -195,13 +204,27 @@ impl Default for EmailSenderEntry {
     }
 }
 
-fn default_false() -> bool { false }
-fn default_true() -> bool { true }
-fn default_rate_limit() -> u32 { 10 }
-fn default_max_response() -> usize { 1_048_576 }
-fn default_timeout() -> u64 { 30 }
-fn default_daily_limit_10() -> u32 { 10 }
-fn default_daily_limit_20() -> u32 { 20 }
+fn default_false() -> bool {
+    false
+}
+fn default_true() -> bool {
+    true
+}
+fn default_rate_limit() -> u32 {
+    10
+}
+fn default_max_response() -> usize {
+    1_048_576
+}
+fn default_timeout() -> u64 {
+    30
+}
+fn default_daily_limit_10() -> u32 {
+    10
+}
+fn default_daily_limit_20() -> u32 {
+    20
+}
 
 impl SafeAgentConfig {
     /// Load config from a TOML file. Returns default config if file doesn't exist.
@@ -213,11 +236,11 @@ impl SafeAgentConfig {
         let content = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-        toml::from_str(&content)
-            .map_err(|e| format!("Failed to parse config file: {}", e))
+        toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {}", e))
     }
 
     /// Save config to a TOML file.
+    #[allow(dead_code)]
     pub fn save(&self, path: &Path) -> Result<(), String> {
         let content = toml::to_string_pretty(self)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
@@ -227,11 +250,11 @@ impl SafeAgentConfig {
                 .map_err(|e| format!("Failed to create config directory: {}", e))?;
         }
 
-        std::fs::write(path, content)
-            .map_err(|e| format!("Failed to write config file: {}", e))
+        std::fs::write(path, content).map_err(|e| format!("Failed to write config file: {}", e))
     }
 
     /// Generate a default config file with comments.
+    #[allow(dead_code)]
     pub fn generate_default_toml() -> String {
         r#"# SafeAgent Configuration
 # See docs/troubleshooting.md for help
@@ -291,16 +314,21 @@ enabled = false
 allowed_recipients = []       # e.g. ["*@yourcompany.com", "friend@gmail.com"]
 daily_limit = 20
 require_confirmation = true
-"#.to_string()
+"#
+        .to_string()
     }
 
     /// Convert limits to microdollars for policy engine.
     pub fn daily_spend_limit_microdollars(&self) -> Option<u64> {
-        self.limits.daily_spend_usd.map(|usd| (usd * 1_000_000.0) as u64)
+        self.limits
+            .daily_spend_usd
+            .map(|usd| (usd * 1_000_000.0) as u64)
     }
 
     pub fn monthly_spend_limit_microdollars(&self) -> Option<u64> {
-        self.limits.monthly_spend_usd.map(|usd| (usd * 1_000_000.0) as u64)
+        self.limits
+            .monthly_spend_usd
+            .map(|usd| (usd * 1_000_000.0) as u64)
     }
 }
 
@@ -369,7 +397,10 @@ require_confirmation = true
     #[test]
     fn test_microdollar_conversion() {
         let config = SafeAgentConfig {
-            limits: LimitsConfig { daily_spend_usd: Some(5.0), monthly_spend_usd: Some(50.0) },
+            limits: LimitsConfig {
+                daily_spend_usd: Some(5.0),
+                monthly_spend_usd: Some(50.0),
+            },
             ..Default::default()
         };
         assert_eq!(config.daily_spend_limit_microdollars(), Some(5_000_000));
@@ -393,9 +424,13 @@ require_confirmation = true
 
     #[test]
     fn test_save_and_load() {
-        let dir = std::env::temp_dir().join(format!("safeagent_config_test_{}",
+        let dir = std::env::temp_dir().join(format!(
+            "safeagent_config_test_{}",
             std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos()));
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("safeagent.toml");
 

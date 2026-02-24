@@ -3,6 +3,10 @@ name = "safeagent-gateway"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+name = "safeagent_gateway"
+path = "src/lib.rs"
+
 [[bin]]
 name = "safeagent"
 path = "src/main.rs"
@@ -14,7 +18,9 @@ serde_json.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+async-trait = "0.1"
 aes-gcm = "0.10"
+argon2 = "0.5"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
@@ -43,5 +49,7 @@ path = "../../eval/eval_routing.rs"
 [dev-dependencies]
 safeagent-multi-user = { path = "../multi-user" }
 aes-gcm = "0.10"
+async-trait = "0.1"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

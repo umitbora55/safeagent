@@ -1,0 +1,31 @@
+id: RT-I-002
+name: 'Red Team: Path traversal information leak'
+threat_ref: I-002
+category: Information Disclosure
+component: shell_executor
+description: Verify that 'Path traversal information leak' is mitigated. Attacker reads arbitrary files via path traversal
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for shell_executor component
+- step: 2
+  action: path_traversal
+  input: cat ../../../../etc/passwd
+  description: Attempt path_traversal with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: blocked_traversal'
+assertions:
+- assertion: action_path_traversal_blocked
+  expected_outcome: blocked_traversal
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Information Disclosure
+  impact: high
+  likelihood: medium
+  mitigations: Path traversal blocking, Sensitive path blacklist

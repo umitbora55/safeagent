@@ -1,0 +1,21 @@
+id: CH-I-001
+name: 'Chaos: audit-log under new_secret_format'
+threat_ref: I-001
+category: Information Disclosure
+component: audit-log
+description: 'Test audit-log resilience when new_secret_format occurs. Related threat: API key exposure in logs'
+fault_injection:
+  fault_type: new_secret_format
+  target: audit-log
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: fallback_redaction_or_block
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Information Disclosure
+  impact: critical
+  likelihood: medium

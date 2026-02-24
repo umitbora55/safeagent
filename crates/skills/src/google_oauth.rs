@@ -64,7 +64,9 @@ pub async fn authorize(
         return Err(format!("Token exchange error: {}", body));
     }
 
-    let token_resp: TokenResponse = resp.json().await
+    let token_resp: TokenResponse = resp
+        .json()
+        .await
         .map_err(|e| format!("Failed to parse token response: {}", e))?;
 
     let expires_at = chrono::Utc::now().timestamp() + token_resp.expires_in as i64;
@@ -100,15 +102,17 @@ pub async fn refresh_token(
         return Err(format!("Token refresh error: {}", body));
     }
 
-    let token_resp: TokenResponse = resp.json().await
+    let token_resp: TokenResponse = resp
+        .json()
+        .await
         .map_err(|e| format!("Failed to parse token response: {}", e))?;
 
     let expires_at = chrono::Utc::now().timestamp() + token_resp.expires_in as i64;
 
     Ok(OAuthTokens {
         access_token: token_resp.access_token,
-        refresh_token: if token_resp.refresh_token.is_some() {
-            token_resp.refresh_token.unwrap()
+        refresh_token: if let Some(token) = token_resp.refresh_token {
+            token
         } else {
             refresh_token.to_string()
         },
@@ -129,7 +133,10 @@ pub async fn get_valid_token(
     }
 
     if tokens.refresh_token.is_empty() {
-        return Err("Token expired and no refresh token available. Run `safeagent init` to re-authorize.".into());
+        return Err(
+            "Token expired and no refresh token available. Run `safeagent init` to re-authorize."
+                .into(),
+        );
     }
 
     refresh_token(client_id, client_secret, &tokens.refresh_token).await
@@ -137,17 +144,22 @@ pub async fn get_valid_token(
 
 /// Start a minimal HTTP server on localhost:18790 to receive the OAuth callback.
 async fn receive_auth_code() -> Result<String, String> {
-    use tokio::net::TcpListener;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
 
-    let listener = TcpListener::bind("127.0.0.1:18790").await
+    let listener = TcpListener::bind("127.0.0.1:18790")
+        .await
         .map_err(|e| format!("Cannot bind to port 18790: {}", e))?;
 
-    let (mut stream, _) = listener.accept().await
+    let (mut stream, _) = listener
+        .accept()
+        .await
         .map_err(|e| format!("Failed to accept connection: {}", e))?;
 
     let mut buf = vec![0u8; 4096];
-    let n = stream.read(&mut buf).await
+    let n = stream
+        .read(&mut buf)
+        .await
         .map_err(|e| format!("Failed to read request: {}", e))?;
 
     let request = String::from_utf8_lossy(&buf[..n]);
@@ -158,13 +170,12 @@ async fn receive_auth_code() -> Result<String, String> {
         .next()
         .and_then(|line| line.split_whitespace().nth(1))
         .and_then(|path| {
-            path.split('?')
-                .nth(1)
-                .and_then(|query| {
-                    query.split('&')
-                        .find(|p| p.starts_with("code="))
-                        .map(|p| p.trim_start_matches("code=").to_string())
-                })
+            path.split('?').nth(1).and_then(|query| {
+                query
+                    .split('&')
+                    .find(|p| p.starts_with("code="))
+                    .map(|p| p.trim_start_matches("code=").to_string())
+            })
         })
         .ok_or_else(|| "No authorization code received".to_string())?;
 
@@ -172,7 +183,8 @@ async fn receive_auth_code() -> Result<String, String> {
     let html = "<!DOCTYPE html><html><body><h2>✅ SafeAgent authorized!</h2><p>You can close this tab.</p></body></html>";
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",
-        html.len(), html
+        html.len(),
+        html
     );
     let _ = stream.write_all(response.as_bytes()).await;
 
@@ -182,12 +194,16 @@ async fn receive_auth_code() -> Result<String, String> {
 fn open_browser(url: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open").arg(url).spawn()
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
             .map_err(|e| format!("Failed to open browser: {}", e))?;
     }
     #[cfg(target_os = "linux")]
     {
-        std::process::Command::new("xdg-open").arg(url).spawn()
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
             .map_err(|e| format!("Failed to open browser: {}", e))?;
     }
     Ok(())

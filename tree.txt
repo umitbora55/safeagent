@@ -1,0 +1,146 @@
+.
+├── .DS_Store
+├── .dockerignore
+├── .github
+│   └── workflows
+│       ├── ci.yml
+│       └── release.yml
+├── .gitignore
+├── CHANGELOG.md
+├── Cargo.lock
+├── Cargo.toml
+├── DESKTOP_BUILD.md
+├── Dockerfile
+├── LICENSE
+├── README.md
+├── SAFEAGENT_ROADMAP__10_.md
+├── SECURITY.md
+├── crates
+│   ├── .DS_Store
+│   ├── audit-log
+│   │   ├── Cargo.toml
+│   │   └── src
+│   │       └── lib.rs
+│   ├── bridges
+│   │   ├── common
+│   │   │   ├── Cargo.toml
+│   │   │   └── src
+│   │   │       └── lib.rs
+│   │   └── telegram
+│   │       ├── Cargo.toml
+│   │       └── src
+│   │           └── lib.rs
+│   ├── cost-ledger
+│   │   ├── Cargo.toml
+│   │   └── src
+│   │       └── lib.rs
+│   ├── credential-vault
+│   │   ├── Cargo.toml
+│   │   └── src
+│   │       ├── keychain.rs
+│   │       └── lib.rs
+│   ├── gateway
+│   │   ├── .gitignore
+│   │   ├── Cargo.toml
+│   │   ├── src
+│   │   │   ├── circuit_breaker.rs
+│   │   │   ├── cmd_audit.rs
+│   │   │   ├── cmd_doctor.rs
+│   │   │   ├── cmd_export.rs
+│   │   │   ├── cmd_export_logs.rs
+│   │   │   ├── cmd_init.rs
+│   │   │   ├── cmd_stats.rs
+│   │   │   ├── config.rs
+│   │   │   ├── encryption.rs
+│   │   │   ├── main.rs
+│   │   │   ├── pricing.rs
+│   │   │   ├── providers.rs
+│   │   │   └── shutdown.rs
+│   │   └── tests
+│   │       └── integration_test.rs
+│   ├── llm-router
+│   │   ├── .DS_Store
+│   │   ├── Cargo.toml
+│   │   ├── centroids.json
+│   │   ├── parallel_generator.py
+│   │   ├── reference_embeddings.json
+│   │   ├── src
+│   │   │   └── lib.rs
+│   │   └── training_data.json
+│   ├── memory
+│   │   ├── Cargo.toml
+│   │   └── src
+│   │       └── lib.rs
+│   ├── multi-user
+│   │   ├── Cargo.toml
+│   │   └── src
+│   │       └── lib.rs
+│   ├── policy-engine
+│   │   ├── Cargo.toml
+│   │   └── src
+│   │       └── lib.rs
+│   ├── prompt-guard
+│   │   ├── Cargo.toml
+│   │   └── src
+│   │       └── lib.rs
+│   ├── skills
+│   │   ├── Cargo.toml
+│   │   └── src
+│   │       ├── browser_control.rs
+│   │       ├── calendar_reader.rs
+│   │       ├── calendar_writer.rs
+│   │       ├── email_reader.rs
+│   │       ├── email_sender.rs
+│   │       ├── file_reader.rs
+│   │       ├── file_writer.rs
+│   │       ├── google_oauth.rs
+│   │       ├── image_processor.rs
+│   │       ├── lib.rs
+│   │       ├── shell_executor.rs
+│   │       ├── url_fetcher.rs
+│   │       ├── voice.rs
+│   │       └── web_search.rs
+│   └── web-ui
+│       ├── Cargo.toml
+│       └── src
+│           ├── lib.rs
+│           └── mcp.rs
+├── desktop
+│   ├── Cargo.toml
+│   ├── build.rs
+│   ├── gen
+│   │   └── schemas
+│   │       ├── acl-manifests.json
+│   │       ├── capabilities.json
+│   │       ├── desktop-schema.json
+│   │       └── macOS-schema.json
+│   ├── icons
+│   │   ├── generate_icon.sh
+│   │   └── icon.png
+│   ├── src
+│   │   └── main.rs
+│   └── tauri.conf.json
+├── desktop-ui
+│   └── index.html
+├── docker-compose.yml
+├── docs
+│   ├── THREAT_MODEL.md
+│   └── TROUBLESHOOTING.md
+├── eval
+│   ├── anchor_dataset.jsonl
+│   ├── coverage_dataset.jsonl
+│   ├── eval_report.json
+│   └── eval_routing.rs
+├── examples
+│   ├── config-balanced.toml
+│   ├── config-economy.toml
+│   ├── config-performance.toml
+│   └── config-telegram.toml
+├── fly.toml
+├── mixed_20.jsonl
+├── railway.toml
+├── tests
+│   └── redaction_ci_test.sh
+└── tree.txt
+
+42 directories, 102 files

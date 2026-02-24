@@ -19,9 +19,9 @@ pub fn run_export_logs(data_dir: &Path) -> Result<()> {
     let mut lines: Vec<String> = Vec::new();
 
     if audit_path.exists() {
-        let audit = AuditLog::new(audit_path, 30, 200)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
-        let entries = audit.recent_entries(10000)
+        let audit = AuditLog::new(audit_path, 30, 200).map_err(|e| anyhow::anyhow!("{}", e))?;
+        let entries = audit
+            .recent_entries(10000)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         for e in &entries {
@@ -46,8 +46,7 @@ pub fn run_export_logs(data_dir: &Path) -> Result<()> {
     }
 
     if ledger_path.exists() {
-        let ledger = CostLedger::new(ledger_path)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let ledger = CostLedger::new(ledger_path).map_err(|e| anyhow::anyhow!("{}", e))?;
 
         if let Ok(summary) = ledger.total_summary() {
             let line = serde_json::json!({

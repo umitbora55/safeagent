@@ -1,4 +1,4 @@
-use crate::{Permission, Skill, SkillConfig, SkillResult, validate_url};
+use crate::{validate_url, Permission, Skill, SkillConfig, SkillResult};
 use async_trait::async_trait;
 
 /// Headless browser control with domain allowlist.
@@ -21,7 +21,10 @@ impl BrowserControlSkill {
                 .unwrap_or_default(),
             allowed_domains,
             allow_form_submission: false,
-            config: SkillConfig { enabled: false, ..Default::default() },
+            config: SkillConfig {
+                enabled: false,
+                ..Default::default()
+            },
         }
     }
 
@@ -40,7 +43,10 @@ impl BrowserControlSkill {
         validate_url(url)?;
 
         if self.allowed_domains.is_empty() {
-            return Err("No domains allowlisted. Configure [skills.browser_control] allowed_domains.".into());
+            return Err(
+                "No domains allowlisted. Configure [skills.browser_control] allowed_domains."
+                    .into(),
+            );
         }
 
         let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
@@ -67,11 +73,22 @@ impl BrowserControlSkill {
 /// Supported browser actions
 #[derive(Debug)]
 enum BrowserAction {
-    Navigate { url: String },
-    Screenshot { url: String },
-    ExtractText { url: String },
-    ExtractLinks { url: String },
-    SubmitForm { url: String, data: Vec<(String, String)> },
+    Navigate {
+        url: String,
+    },
+    Screenshot {
+        url: String,
+    },
+    ExtractText {
+        url: String,
+    },
+    ExtractLinks {
+        url: String,
+    },
+    SubmitForm {
+        url: String,
+        data: Vec<(String, String)>,
+    },
 }
 
 fn parse_browser_input(input: &str) -> Result<BrowserAction, String> {
@@ -83,19 +100,39 @@ fn parse_browser_input(input: &str) -> Result<BrowserAction, String> {
     let first = lines[0].trim().to_lowercase();
 
     if first.starts_with("navigate ") || first.starts_with("goto ") || first.starts_with("git ") {
-        let url = first.splitn(2, ' ').nth(1).unwrap_or("").trim().to_string();
+        let url = first
+            .split_once(' ')
+            .map(|(_, rest)| rest.trim())
+            .unwrap_or("")
+            .to_string();
         Ok(BrowserAction::Navigate { url })
     } else if first.starts_with("screenshot ") {
-        let url = first.splitn(2, ' ').nth(1).unwrap_or("").trim().to_string();
+        let url = first
+            .split_once(' ')
+            .map(|(_, rest)| rest.trim())
+            .unwrap_or("")
+            .to_string();
         Ok(BrowserAction::Screenshot { url })
     } else if first.starts_with("extract_text ") || first.starts_with("text ") {
-        let url = first.splitn(2, ' ').nth(1).unwrap_or("").trim().to_string();
+        let url = first
+            .split_once(' ')
+            .map(|(_, rest)| rest.trim())
+            .unwrap_or("")
+            .to_string();
         Ok(BrowserAction::ExtractText { url })
     } else if first.starts_with("extract_links ") || first.starts_with("links ") {
-        let url = first.splitn(2, ' ').nth(1).unwrap_or("").trim().to_string();
+        let url = first
+            .split_once(' ')
+            .map(|(_, rest)| rest.trim())
+            .unwrap_or("")
+            .to_string();
         Ok(BrowserAction::ExtractLinks { url })
     } else if first.starts_with("submit_form ") {
-        let url = first.splitn(2, ' ').nth(1).unwrap_or("").trim().to_string();
+        let url = first
+            .split_once(' ')
+            .map(|(_, rest)| rest.trim())
+            .unwrap_or("")
+            .to_string();
         let mut data = Vec::new();
         for line in &lines[1..] {
             if let Some((k, v)) = line.split_once('=') {
@@ -107,7 +144,7 @@ fn parse_browser_input(input: &str) -> Result<BrowserAction, String> {
         // Default: navigate to URL
         Ok(BrowserAction::Navigate { url: first })
     } else {
-        Err(format!("Unknown action. Supported: navigate <url>, extract_text <url>, extract_links <url>, submit_form <url>"))
+        Err("Unknown action. Supported: navigate <url>, extract_text <url>, extract_links <url>, submit_form <url>".to_string())
     }
 }
 
@@ -125,32 +162,76 @@ fn extract_text_from_html(html: &str) -> String {
 
     let mut i = 0;
     while i < chars.len() {
-        if !in_tag && i + 7 < lower_chars.len() && lower_chars[i..i+7].iter().collect::<String>() == "<script" {
-            in_script = true; in_tag = true; i += 1; continue;
+        if !in_tag
+            && i + 7 < lower_chars.len()
+            && lower_chars[i..i + 7].iter().collect::<String>() == "<script"
+        {
+            in_script = true;
+            in_tag = true;
+            i += 1;
+            continue;
         }
-        if in_script && i + 9 <= lower_chars.len() && lower_chars[i..i+9].iter().collect::<String>() == "</script>" {
-            in_script = false; in_tag = false; i += 9; continue;
+        if in_script
+            && i + 9 <= lower_chars.len()
+            && lower_chars[i..i + 9].iter().collect::<String>() == "</script>"
+        {
+            in_script = false;
+            in_tag = false;
+            i += 9;
+            continue;
         }
-        if !in_tag && i + 6 < lower_chars.len() && lower_chars[i..i+6].iter().collect::<String>() == "<style" {
-            in_style = true; in_tag = true; i += 1; continue;
+        if !in_tag
+            && i + 6 < lower_chars.len()
+            && lower_chars[i..i + 6].iter().collect::<String>() == "<style"
+        {
+            in_style = true;
+            in_tag = true;
+            i += 1;
+            continue;
         }
-        if in_style && i + 8 <= lower_chars.len() && lower_chars[i..i+8].iter().collect::<String>() == "</style>" {
-            in_style = false; in_tag = false; i += 8; continue;
+        if in_style
+            && i + 8 <= lower_chars.len()
+            && lower_chars[i..i + 8].iter().collect::<String>() == "</style>"
+        {
+            in_style = false;
+            in_tag = false;
+            i += 8;
+            continue;
         }
-        if in_script || in_style { i += 1; continue; }
+        if in_script || in_style {
+            i += 1;
+            continue;
+        }
 
         let ch = chars[i];
-        if ch == '<' { in_tag = true; if !last_was_space { text.push(' '); last_was_space = true; } }
-        else if ch == '>' { in_tag = false; }
-        else if !in_tag {
-            if ch.is_whitespace() { if !last_was_space { text.push(' '); last_was_space = true; } }
-            else { text.push(ch); last_was_space = false; }
+        if ch == '<' {
+            in_tag = true;
+            if !last_was_space {
+                text.push(' ');
+                last_was_space = true;
+            }
+        } else if ch == '>' {
+            in_tag = false;
+        } else if !in_tag {
+            if ch.is_whitespace() {
+                if !last_was_space {
+                    text.push(' ');
+                    last_was_space = true;
+                }
+            } else {
+                text.push(ch);
+                last_was_space = false;
+            }
         }
         i += 1;
     }
 
-    text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-        .replace("&quot;", "\"").replace("&#39;", "'").replace("&nbsp;", " ")
+    text.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&nbsp;", " ")
 }
 
 /// Extract all links from HTML
@@ -185,12 +266,18 @@ fn extract_links_from_html(html: &str, base_url: &str) -> Vec<String> {
 
 #[async_trait]
 impl Skill for BrowserControlSkill {
-    fn id(&self) -> &str { "browser_control" }
-    fn name(&self) -> &str { "Browser Control" }
+    fn id(&self) -> &str {
+        "browser_control"
+    }
+    fn name(&self) -> &str {
+        "Browser Control"
+    }
     fn description(&self) -> &str {
         "Headless browser with domain allowlist. Actions: navigate <url>, extract_text <url>, extract_links <url>, submit_form <url>"
     }
-    fn permissions(&self) -> Vec<Permission> { vec![Permission("execute:browser".into())] }
+    fn permissions(&self) -> Vec<Permission> {
+        vec![Permission("execute:browser".into())]
+    }
 
     async fn execute(&self, input: &str) -> SkillResult {
         if !self.config.enabled {
@@ -198,7 +285,8 @@ impl Skill for BrowserControlSkill {
                 "Browser control is disabled. Enable in safeagent.toml:\n\
                  [skills.browser_control]\n\
                  enabled = true\n\
-                 allowed_domains = [\"example.com\"]".into()
+                 allowed_domains = [\"example.com\"]"
+                    .into(),
             );
         }
 
@@ -209,7 +297,9 @@ impl Skill for BrowserControlSkill {
 
         match action {
             BrowserAction::Navigate { url } | BrowserAction::ExtractText { url } => {
-                if let Err(e) = self.is_domain_allowed(&url) { return SkillResult::err(e); }
+                if let Err(e) = self.is_domain_allowed(&url) {
+                    return SkillResult::err(e);
+                }
 
                 let resp = match self.client.get(&url).send().await {
                     Ok(r) => r,
@@ -221,13 +311,22 @@ impl Skill for BrowserControlSkill {
                 let body = resp.text().await.unwrap_or_default();
                 let text = extract_text_from_html(&body);
                 let truncated = if text.len() > self.config.max_response_bytes {
-                    format!("{}...\n[Truncated]", &text[..self.config.max_response_bytes])
-                } else { text };
+                    format!(
+                        "{}...\n[Truncated]",
+                        &text[..self.config.max_response_bytes]
+                    )
+                } else {
+                    text
+                };
 
-                SkillResult::ok(truncated).with_meta("url", &url).with_meta("action", "extract_text")
+                SkillResult::ok(truncated)
+                    .with_meta("url", &url)
+                    .with_meta("action", "extract_text")
             }
             BrowserAction::Screenshot { url } => {
-                if let Err(e) = self.is_domain_allowed(&url) { return SkillResult::err(e); }
+                if let Err(e) = self.is_domain_allowed(&url) {
+                    return SkillResult::err(e);
+                }
                 // Without a real headless browser, return page title + metadata
                 let resp = match self.client.get(&url).send().await {
                     Ok(r) => r,
@@ -235,11 +334,17 @@ impl Skill for BrowserControlSkill {
                 };
                 let body = resp.text().await.unwrap_or_default();
                 let title = extract_title(&body);
-                SkillResult::ok(format!("📸 Page: {}\nURL: {}\n[Screenshot requires chromium runtime]", title, url))
-                    .with_meta("url", &url).with_meta("action", "screenshot")
+                SkillResult::ok(format!(
+                    "📸 Page: {}\nURL: {}\n[Screenshot requires chromium runtime]",
+                    title, url
+                ))
+                .with_meta("url", &url)
+                .with_meta("action", "screenshot")
             }
             BrowserAction::ExtractLinks { url } => {
-                if let Err(e) = self.is_domain_allowed(&url) { return SkillResult::err(e); }
+                if let Err(e) = self.is_domain_allowed(&url) {
+                    return SkillResult::err(e);
+                }
                 let resp = match self.client.get(&url).send().await {
                     Ok(r) => r,
                     Err(e) => return SkillResult::err(format!("Request failed: {}", e)),
@@ -247,7 +352,9 @@ impl Skill for BrowserControlSkill {
                 let body = resp.text().await.unwrap_or_default();
                 let links = extract_links_from_html(&body, &url);
                 let output = format!("🔗 {} links found:\n\n{}", links.len(), links.join("\n"));
-                SkillResult::ok(output).with_meta("url", &url).with_meta("link_count", &links.len().to_string())
+                SkillResult::ok(output)
+                    .with_meta("url", &url)
+                    .with_meta("link_count", &links.len().to_string())
             }
             BrowserAction::SubmitForm { url, data } => {
                 if !self.allow_form_submission {
@@ -255,7 +362,9 @@ impl Skill for BrowserControlSkill {
                         "Form submission is disabled by default. Enable with allow_form_submission = true".into()
                     );
                 }
-                if let Err(e) = self.is_domain_allowed(&url) { return SkillResult::err(e); }
+                if let Err(e) = self.is_domain_allowed(&url) {
+                    return SkillResult::err(e);
+                }
                 let resp = match self.client.post(&url).form(&data).send().await {
                     Ok(r) => r,
                     Err(e) => return SkillResult::err(format!("Form submit failed: {}", e)),
@@ -263,9 +372,14 @@ impl Skill for BrowserControlSkill {
                 let status = resp.status();
                 let body = resp.text().await.unwrap_or_default();
                 let text = extract_text_from_html(&body);
-                let truncated = if text.len() > 2000 { format!("{}...", &text[..2000]) } else { text };
+                let truncated = if text.len() > 2000 {
+                    format!("{}...", &text[..2000])
+                } else {
+                    text
+                };
                 SkillResult::ok(format!("Form submitted (HTTP {})\n\n{}", status, truncated))
-                    .with_meta("url", &url).with_meta("action", "submit_form")
+                    .with_meta("url", &url)
+                    .with_meta("action", "submit_form")
             }
         }
     }
@@ -276,7 +390,7 @@ fn extract_title(html: &str) -> String {
     if let Some(start) = lower.find("<title>") {
         let s = start + 7;
         if let Some(end) = lower[s..].find("</title>") {
-            return html[s..s+end].trim().to_string();
+            return html[s..s + end].trim().to_string();
         }
     }
     "(No title)".into()
@@ -297,7 +411,10 @@ mod tests {
 
     #[test]
     fn test_domain_not_allowed() {
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = BrowserControlSkill::new(vec!["example.com".into()]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("navigate https://evil.com"));
@@ -307,7 +424,10 @@ mod tests {
 
     #[test]
     fn test_empty_allowlist() {
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = BrowserControlSkill::new(vec![]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("navigate https://example.com"));
@@ -317,7 +437,10 @@ mod tests {
 
     #[test]
     fn test_form_submission_blocked() {
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = BrowserControlSkill::new(vec!["example.com".into()]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("submit_form https://example.com/form\nname=test"));
@@ -327,7 +450,10 @@ mod tests {
 
     #[test]
     fn test_ssrf_blocked() {
-        let config = SkillConfig { enabled: true, ..Default::default() };
+        let config = SkillConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let skill = BrowserControlSkill::new(vec!["*".into()]).with_config(config);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(skill.execute("navigate http://169.254.169.254/latest"));

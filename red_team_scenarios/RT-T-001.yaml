@@ -1,0 +1,31 @@
+id: RT-T-001
+name: 'Red Team: Audit log modification'
+threat_ref: T-001
+category: Tampering
+component: audit-log
+description: Verify that 'Audit log modification' is mitigated. Attacker modifies audit log entries to hide malicious activity
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for audit-log component
+- step: 2
+  action: modify_audit_entry
+  input: change_event_type_field
+  description: Attempt modify_audit_entry with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: hash_verification_failed'
+assertions:
+- assertion: action_modify_audit_entry_blocked
+  expected_outcome: hash_verification_failed
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Tampering
+  impact: critical
+  likelihood: low
+  mitigations: SHA256 hash chain, Sequence number verification

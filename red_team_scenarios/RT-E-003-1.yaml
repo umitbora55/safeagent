@@ -1,0 +1,31 @@
+id: RT-E-003-1
+name: 'Red Team: Shell executor privilege escalation'
+threat_ref: E-003
+category: Elevation of Privilege
+component: shell_executor
+description: Verify that 'Shell executor privilege escalation' is mitigated. Execute commands with elevated privileges
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for shell_executor component
+- step: 2
+  action: privilege_escalation
+  input: sudo cat /etc/shadow
+  description: Attempt privilege_escalation with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: blocked_dangerous_pattern'
+assertions:
+- assertion: action_privilege_escalation_blocked
+  expected_outcome: blocked_dangerous_pattern
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Elevation of Privilege
+  impact: critical
+  likelihood: low
+  mitigations: sudo/su/doas blocked, env_clear(), PATH restricted

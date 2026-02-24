@@ -1,0 +1,318 @@
+# Policy Conformance Test Suite - Basic Cases
+# Tests fundamental policy engine behavior
+
+version: "1.0"
+suite: "basic"
+
+cases:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Default Permission Level Tests
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "BASIC-001"
+    name: "Green action auto-allows"
+    action_type: "read_weather"
+    description: "Check weather forecast"
+    config: {}
+    expected:
+      decision: "allow"
+
+  - id: "BASIC-002"
+    name: "Green action - read_calendar"
+    action_type: "read_calendar"
+    description: "Read calendar events"
+    config: {}
+    expected:
+      decision: "allow"
+
+  - id: "BASIC-003"
+    name: "Green action - search_web"
+    action_type: "search_web"
+    description: "Search the web"
+    config: {}
+    expected:
+      decision: "allow"
+
+  - id: "BASIC-004"
+    name: "Green action - summarize_content"
+    action_type: "summarize_content"
+    description: "Summarize document"
+    config: {}
+    expected:
+      decision: "allow"
+
+  - id: "BASIC-005"
+    name: "Yellow action notifies"
+    action_type: "draft_email"
+    description: "Draft an email"
+    config: {}
+    expected:
+      decision: "allow_with_notification"
+      timeout_secs: 30
+
+  - id: "BASIC-006"
+    name: "Yellow action - add_calendar_event"
+    action_type: "add_calendar_event"
+    description: "Add calendar event"
+    config: {}
+    expected:
+      decision: "allow_with_notification"
+
+  - id: "BASIC-007"
+    name: "Yellow action - create_reminder"
+    action_type: "create_reminder"
+    description: "Create a reminder"
+    config: {}
+    expected:
+      decision: "allow_with_notification"
+
+  - id: "BASIC-008"
+    name: "Yellow action - read_email"
+    action_type: "read_email"
+    description: "Read email inbox"
+    config: {}
+    expected:
+      decision: "allow_with_notification"
+
+  - id: "BASIC-009"
+    name: "Red action requires approval"
+    action_type: "send_email"
+    description: "Send an email"
+    config: {}
+    expected:
+      decision: "require_approval"
+      level: "red"
+
+  - id: "BASIC-010"
+    name: "Red action - send_message"
+    action_type: "send_message"
+    description: "Send a message"
+    config: {}
+    expected:
+      decision: "require_approval"
+
+  - id: "BASIC-011"
+    name: "Red action - delete_file"
+    action_type: "delete_file"
+    description: "Delete a file"
+    config: {}
+    expected:
+      decision: "require_approval"
+
+  - id: "BASIC-012"
+    name: "Red action - run_shell_command"
+    action_type: "run_shell_command"
+    description: "Run shell command"
+    config: {}
+    expected:
+      decision: "require_approval"
+
+  - id: "BASIC-013"
+    name: "Red action - make_purchase"
+    action_type: "make_purchase"
+    description: "Make a purchase"
+    config: {}
+    expected:
+      decision: "require_approval"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Custom Action Tests
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "BASIC-014"
+    name: "Custom action defaults to yellow"
+    action_type: "custom:my_action"
+    description: "Custom action"
+    config: {}
+    expected:
+      decision: "allow_with_notification"
+
+  - id: "BASIC-015"
+    name: "Custom action with override to green"
+    action_type: "custom:safe_action"
+    description: "Safe custom action"
+    config:
+      action_overrides:
+        "custom:safe_action": "green"
+    expected:
+      decision: "allow"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Blocked Action Tests
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "BASIC-016"
+    name: "Blocked action denied"
+    action_type: "run_shell_command"
+    description: "Run dangerous command"
+    config:
+      blocked_actions: ["run_shell_command"]
+    expected:
+      decision: "deny"
+      reason_contains: "blocked"
+
+  - id: "BASIC-017"
+    name: "Multiple blocked actions"
+    action_type: "delete_file"
+    description: "Delete important file"
+    config:
+      blocked_actions: ["run_shell_command", "delete_file", "make_purchase"]
+    expected:
+      decision: "deny"
+
+  - id: "BASIC-018"
+    name: "Non-blocked action still works"
+    action_type: "send_email"
+    description: "Send email"
+    config:
+      blocked_actions: ["run_shell_command"]
+    expected:
+      decision: "require_approval"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Override Tests
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "BASIC-019"
+    name: "Override red to green"
+    action_type: "send_email"
+    description: "Send email"
+    config:
+      action_overrides:
+        "send_email": "green"
+    expected:
+      decision: "allow"
+
+  - id: "BASIC-020"
+    name: "Override red to yellow"
+    action_type: "delete_file"
+    description: "Delete file"
+    config:
+      action_overrides:
+        "delete_file": "yellow"
+    expected:
+      decision: "allow_with_notification"
+
+  - id: "BASIC-021"
+    name: "Override green to red"
+    action_type: "read_weather"
+    description: "Check weather"
+    config:
+      action_overrides:
+        "read_weather": "red"
+    expected:
+      decision: "require_approval"
+
+  - id: "BASIC-022"
+    name: "Override yellow to green"
+    action_type: "draft_email"
+    description: "Draft email"
+    config:
+      action_overrides:
+        "draft_email": "green"
+    expected:
+      decision: "allow"
+
+  - id: "BASIC-023"
+    name: "Multiple overrides"
+    action_type: "send_email"
+    description: "Send email"
+    config:
+      action_overrides:
+        "send_email": "green"
+        "delete_file": "yellow"
+    expected:
+      decision: "allow"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Timeout Configuration Tests
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "BASIC-024"
+    name: "Custom yellow timeout"
+    action_type: "draft_email"
+    description: "Draft email"
+    config:
+      yellow_timeout_secs: 60
+    expected:
+      decision: "allow_with_notification"
+      timeout_secs: 60
+
+  - id: "BASIC-025"
+    name: "Zero timeout (edge case)"
+    action_type: "draft_email"
+    description: "Draft email"
+    config:
+      yellow_timeout_secs: 0
+    expected:
+      decision: "allow_with_notification"
+      timeout_secs: 0
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Budget Limit Tests
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "BASIC-026"
+    name: "Daily budget allows spend"
+    action_type: "read_weather"
+    description: "Weather check"
+    config:
+      daily_spend_limit_microdollars: 1000000
+    pre_spend_microdollars: 500000
+    spend_microdollars: 300000
+    expected:
+      decision: "allow"
+      budget_ok: true
+
+  - id: "BASIC-027"
+    name: "Daily budget blocks over-spend"
+    action_type: "read_weather"
+    description: "Weather check"
+    config:
+      daily_spend_limit_microdollars: 1000000
+    pre_spend_microdollars: 800000
+    spend_microdollars: 500000
+    expected:
+      decision: "allow"
+      budget_ok: false
+
+  - id: "BASIC-028"
+    name: "Monthly budget allows spend"
+    action_type: "read_weather"
+    description: "Weather check"
+    config:
+      monthly_spend_limit_microdollars: 10000000
+    pre_spend_monthly_microdollars: 5000000
+    spend_microdollars: 1000000
+    expected:
+      decision: "allow"
+      budget_ok: true
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Combination Tests
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "BASIC-029"
+    name: "Blocked overrides any override"
+    action_type: "send_email"
+    description: "Send email"
+    config:
+      action_overrides:
+        "send_email": "green"
+      blocked_actions: ["send_email"]
+    expected:
+      decision: "deny"
+
+  - id: "BASIC-030"
+    name: "Full config combination"
+    action_type: "draft_email"
+    description: "Draft email"
+    config:
+      action_overrides:
+        "send_email": "green"
+      blocked_actions: ["run_shell_command"]
+      yellow_timeout_secs: 45
+      daily_spend_limit_microdollars: 5000000
+    expected:
+      decision: "allow_with_notification"
+      timeout_secs: 45

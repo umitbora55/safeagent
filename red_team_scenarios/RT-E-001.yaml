@@ -1,0 +1,31 @@
+id: RT-E-001
+name: 'Red Team: Skill execution without approval'
+threat_ref: E-001
+category: Elevation of Privilege
+component: skill_dispatch
+description: Verify that 'Skill execution without approval' is mitigated. Execute red-level skill without supervisor approval
+steps:
+- step: 1
+  action: setup
+  input: initialize_test_environment
+  description: Set up test environment for skill_dispatch component
+- step: 2
+  action: bypass_policy
+  input: direct_skill_execute
+  description: Attempt bypass_policy with malicious input
+- step: 3
+  action: verify
+  input: check_outcome
+  description: 'Verify expected outcome: policy_enforced'
+assertions:
+- assertion: action_bypass_policy_blocked
+  expected_outcome: policy_enforced
+- assertion: no_unauthorized_access
+  expected_outcome: 'true'
+- assertion: audit_event_logged
+  expected_outcome: 'true'
+metadata:
+  category: Elevation of Privilege
+  impact: critical
+  likelihood: low
+  mitigations: Policy-before-tool enforcement, Mandatory approval for red actions

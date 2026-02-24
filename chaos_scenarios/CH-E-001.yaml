@@ -1,0 +1,21 @@
+id: CH-E-001
+name: 'Chaos: skill_dispatch under supervisor_unavailable'
+threat_ref: E-001
+category: Elevation of Privilege
+component: skill_dispatch
+description: 'Test skill_dispatch resilience when supervisor_unavailable occurs. Related threat: Skill execution without approval'
+fault_injection:
+  fault_type: supervisor_unavailable
+  target: skill_dispatch
+  duration_ms: 5000
+assertions:
+- assertion: system_behavior
+  expected_outcome: deny_on_unavailable
+- assertion: no_data_corruption
+  expected_outcome: 'true'
+- assertion: graceful_recovery
+  expected_outcome: 'true'
+metadata:
+  category: Elevation of Privilege
+  impact: critical
+  likelihood: low

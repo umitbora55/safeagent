@@ -1,0 +1,349 @@
+# SafeAgent STRIDE Threat Model
+# Machine-readable format for automated test generation
+#
+# STRIDE Categories:
+# S - Spoofing (identity)
+# T - Tampering (data integrity)
+# R - Repudiation (deniability)
+# I - Information Disclosure
+# D - Denial of Service
+# E - Elevation of Privilege
+
+version: "1.0"
+generated: "2026-02-24"
+system: "SafeAgent AI Assistant"
+
+threats:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SPOOFING THREATS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "S-001"
+    category: "Spoofing"
+    title: "Capability token forgery"
+    description: "Attacker attempts to forge a capability token to bypass authorization"
+    component: "capability-tokens"
+    assets: ["skill execution", "user identity"]
+    likelihood: "medium"
+    impact: "high"
+    mitigations:
+      - "Ed25519 signatures (PASETO v4.public)"
+      - "Server-side key management"
+    test_templates:
+      red_team:
+        - action: "forge_token"
+          input: "modified_payload_with_fake_signature"
+          expected: "verification_failed"
+      chaos:
+        - fault: "key_rotation_during_verification"
+          expected: "graceful_rejection"
+
+  - id: "S-002"
+    category: "Spoofing"
+    title: "Session impersonation"
+    description: "Attacker replays a valid token to impersonate another user"
+    component: "capability-tokens"
+    assets: ["user session", "audit trail"]
+    likelihood: "medium"
+    impact: "high"
+    mitigations:
+      - "Nonce-based replay prevention"
+      - "Token TTL (max 5 minutes)"
+    test_templates:
+      red_team:
+        - action: "replay_token"
+          input: "previously_used_valid_token"
+          expected: "replay_detected"
+      chaos:
+        - fault: "nonce_cache_memory_pressure"
+          expected: "conservative_rejection"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # TAMPERING THREATS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "T-001"
+    category: "Tampering"
+    title: "Audit log modification"
+    description: "Attacker modifies audit log entries to hide malicious activity"
+    component: "audit-log"
+    assets: ["forensic evidence", "compliance records"]
+    likelihood: "low"
+    impact: "critical"
+    mitigations:
+      - "SHA256 hash chain"
+      - "Sequence number verification"
+    test_templates:
+      red_team:
+        - action: "modify_audit_entry"
+          input: "change_event_type_field"
+          expected: "hash_verification_failed"
+      chaos:
+        - fault: "disk_corruption_mid_write"
+          expected: "chain_break_detected"
+
+  - id: "T-002"
+    category: "Tampering"
+    title: "Shell command injection"
+    description: "Attacker injects malicious commands via shell executor"
+    component: "shell_executor"
+    assets: ["system integrity", "data"]
+    likelihood: "medium"
+    impact: "critical"
+    mitigations:
+      - "Direct execve (no shell)"
+      - "Strict allowlist"
+      - "Path resolution validation"
+    test_templates:
+      red_team:
+        - action: "inject_command"
+          input: "echo hello && rm -rf /"
+          expected: "blocked_chaining_operator"
+        - action: "inject_command"
+          input: "cat /etc/shadow"
+          expected: "blocked_sensitive_path"
+      chaos:
+        - fault: "allowlist_config_missing"
+          expected: "deny_all_behavior"
+
+  - id: "T-003"
+    category: "Tampering"
+    title: "Policy bypass via malformed input"
+    description: "Attacker crafts input to bypass policy evaluation"
+    component: "policy-engine"
+    assets: ["access control", "skill execution"]
+    likelihood: "low"
+    impact: "high"
+    mitigations:
+      - "Input validation"
+      - "Strict parsing"
+      - "Default deny"
+    test_templates:
+      red_team:
+        - action: "malformed_policy_context"
+          input: "null_field_values"
+          expected: "deny_with_error"
+      chaos:
+        - fault: "policy_engine_timeout"
+          expected: "deny_on_timeout"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # REPUDIATION THREATS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "R-001"
+    category: "Repudiation"
+    title: "Audit log deletion"
+    description: "Attacker deletes audit entries to deny actions"
+    component: "audit-log"
+    assets: ["accountability", "forensics"]
+    likelihood: "low"
+    impact: "high"
+    mitigations:
+      - "Hash chain integrity"
+      - "Sequence gap detection"
+    test_templates:
+      red_team:
+        - action: "delete_audit_entry"
+          input: "remove_middle_entry"
+          expected: "sequence_gap_detected"
+      chaos:
+        - fault: "storage_unavailable"
+          expected: "buffered_or_failed_safely"
+
+  - id: "R-002"
+    category: "Repudiation"
+    title: "Supervisor approval forgery"
+    description: "Claim approval was given when it was not"
+    component: "supervisor"
+    assets: ["approval records", "accountability"]
+    likelihood: "low"
+    impact: "medium"
+    mitigations:
+      - "Audit log with approval/rejection"
+      - "Timeout auto-rejection"
+    test_templates:
+      red_team:
+        - action: "claim_approval_without_evidence"
+          input: "forge_approval_record"
+          expected: "audit_mismatch_detected"
+      chaos:
+        - fault: "supervisor_process_crash"
+          expected: "timeout_rejection"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # INFORMATION DISCLOSURE THREATS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "I-001"
+    category: "Information Disclosure"
+    title: "API key exposure in logs"
+    description: "API keys accidentally logged in plaintext"
+    component: "audit-log"
+    assets: ["credentials", "API access"]
+    likelihood: "medium"
+    impact: "critical"
+    mitigations:
+      - "Secret redaction (sk-ant-****, pa-****)"
+      - "Pattern-based filtering"
+    test_templates:
+      red_team:
+        - action: "log_with_secrets"
+          input: "sk-ant-secret123abc456def"
+          expected: "secret_redacted"
+      chaos:
+        - fault: "new_secret_format"
+          expected: "fallback_redaction_or_block"
+
+  - id: "I-002"
+    category: "Information Disclosure"
+    title: "Path traversal information leak"
+    description: "Attacker reads arbitrary files via path traversal"
+    component: "shell_executor"
+    assets: ["system files", "credentials"]
+    likelihood: "medium"
+    impact: "high"
+    mitigations:
+      - "Path traversal blocking"
+      - "Sensitive path blacklist"
+    test_templates:
+      red_team:
+        - action: "path_traversal"
+          input: "cat ../../../../etc/passwd"
+          expected: "blocked_traversal"
+      chaos:
+        - fault: "symlink_to_sensitive_file"
+          expected: "canonical_path_blocked"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # DENIAL OF SERVICE THREATS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "D-001"
+    category: "Denial of Service"
+    title: "Shell command timeout abuse"
+    description: "Attacker executes long-running commands to exhaust resources"
+    component: "shell_executor"
+    assets: ["system availability", "resources"]
+    likelihood: "medium"
+    impact: "medium"
+    mitigations:
+      - "Enforced timeout (default 30s)"
+      - "Output size cap"
+      - "kill_on_drop"
+    test_templates:
+      red_team:
+        - action: "long_running_command"
+          input: "sleep 3600"
+          expected: "timeout_and_kill"
+      chaos:
+        - fault: "zombie_process_accumulation"
+          expected: "process_cleanup"
+
+  - id: "D-002"
+    category: "Denial of Service"
+    title: "Nonce cache exhaustion"
+    description: "Attacker floods with tokens to exhaust nonce cache"
+    component: "capability-tokens"
+    assets: ["memory", "token verification"]
+    likelihood: "low"
+    impact: "medium"
+    mitigations:
+      - "Periodic cache cleanup"
+      - "TTL-based expiration"
+    test_templates:
+      red_team:
+        - action: "flood_tokens"
+          input: "10000_unique_tokens"
+          expected: "cleanup_triggered"
+      chaos:
+        - fault: "memory_pressure"
+          expected: "graceful_degradation"
+
+  - id: "D-003"
+    category: "Denial of Service"
+    title: "Policy engine resource exhaustion"
+    description: "Complex policies cause evaluation timeout"
+    component: "policy-engine"
+    assets: ["request processing", "availability"]
+    likelihood: "low"
+    impact: "medium"
+    mitigations:
+      - "Evaluation timeout"
+      - "Rule complexity limits"
+    test_templates:
+      red_team:
+        - action: "complex_policy"
+          input: "deeply_nested_conditions"
+          expected: "evaluation_bounded"
+      chaos:
+        - fault: "cpu_spike_during_evaluation"
+          expected: "timeout_deny"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ELEVATION OF PRIVILEGE THREATS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "E-001"
+    category: "Elevation of Privilege"
+    title: "Skill execution without approval"
+    description: "Execute red-level skill without supervisor approval"
+    component: "skill_dispatch"
+    assets: ["system access", "data"]
+    likelihood: "low"
+    impact: "critical"
+    mitigations:
+      - "Policy-before-tool enforcement"
+      - "Mandatory approval for red actions"
+    test_templates:
+      red_team:
+        - action: "bypass_policy"
+          input: "direct_skill_execute"
+          expected: "policy_enforced"
+      chaos:
+        - fault: "supervisor_unavailable"
+          expected: "deny_on_unavailable"
+
+  - id: "E-002"
+    category: "Elevation of Privilege"
+    title: "Scope escalation via wildcard"
+    description: "User obtains token with broader scope than authorized"
+    component: "capability-tokens"
+    assets: ["authorization", "resources"]
+    likelihood: "low"
+    impact: "high"
+    mitigations:
+      - "Scope validation at generation"
+      - "Server-side scope enforcement"
+    test_templates:
+      red_team:
+        - action: "request_wildcard_scope"
+          input: "scope=*"
+          expected: "scope_denied_or_audited"
+      chaos:
+        - fault: "scope_validation_bypass_attempt"
+          expected: "enforcement_holds"
+
+  - id: "E-003"
+    category: "Elevation of Privilege"
+    title: "Shell executor privilege escalation"
+    description: "Execute commands with elevated privileges"
+    component: "shell_executor"
+    assets: ["system", "root access"]
+    likelihood: "low"
+    impact: "critical"
+    mitigations:
+      - "sudo/su/doas blocked"
+      - "env_clear()"
+      - "PATH restricted"
+    test_templates:
+      red_team:
+        - action: "privilege_escalation"
+          input: "sudo cat /etc/shadow"
+          expected: "blocked_dangerous_pattern"
+        - action: "privilege_escalation"
+          input: "doas ls"
+          expected: "blocked_dangerous_pattern"
+      chaos:
+        - fault: "setuid_binary_in_path"
+          expected: "path_resolution_blocks"
