@@ -1,3 +1,29 @@
-/target
+# build
+target/
+**/target/
+
+# OS junk
 .DS_Store
+
+# logs & data
+logs/
+data/
+*.jsonl
+*.bin
+*.sqlite
 *.db
+
+# local artifacts
+metadata.json
+tree.txt
+
+# pki secrets
+platform/pki/*.key
+platform/pki/*_key.pem
+platform/pki/*.pem
+platform/pki/*.p12
+
+# allow public certs only if needed
+!platform/pki/*.crt
+!platform/pki/*.pub
+!platform/pki/README.md
