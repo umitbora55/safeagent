@@ -209,22 +209,42 @@ verify-v2:
     cargo clippy --manifest-path platform/worker/Cargo.toml --all-targets -- -D warnings
     cargo clippy --manifest-path platform/shared/Cargo.toml --all-targets -- -D warnings
     cargo test --manifest-path platform/control-plane/Cargo.toml
+    just egress-tests-v2
     just sandbox-tests-v2
     cargo test --manifest-path platform/shared/Cargo.toml
     just mtls-smoke-v2
     just approval-e2e-v2
 
+verify-v2-log:
+    mkdir -p logs
+    just verify-v2 > logs/verify_v2_linux.log 2>&1
+
 sandbox-tests-v2:
     @if [ "$(uname -s)" = "Linux" ]; then \
-        cargo test --manifest-path platform/worker/Cargo.toml -- \
+        cargo test --manifest-path platform/worker/Cargo.toml -- --test-threads=1 \
             test_no_new_privs_set \
-            test_capabilities_dropped \
             test_rlimit_enforced \
             test_seccomp_blocks_disallowed_syscall \
-            test_skill_exec_under_sandbox; \
+            test_skill_exec_under_sandbox \
+            test_capabilities_dropped; \
     else \
         echo "sandbox-tests-v2: Not supported on non-Linux platform"; \
     fi
+
+sandbox-tests-v2-log:
+    mkdir -p logs
+    just sandbox-tests-v2 > logs/sandbox_tests_v2_linux.log 2>&1
+
+egress-tests-v2:
+    @if [ "$(uname -s)" = "Linux" ]; then \
+        cargo test --manifest-path platform/worker/Cargo.toml --test egress_policy_tests; \
+    else \
+        echo "egress-tests-v2: Not supported on non-Linux platform"; \
+    fi
+
+egress-tests-v2-log:
+    mkdir -p logs
+    just egress-tests-v2 > logs/egress_tests_v2_linux.log 2>&1
 
 # mTLS smoke test for platform-v2
 mtls-smoke-v2:

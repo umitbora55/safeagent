@@ -104,7 +104,7 @@ fn prctl(
 }
 
 #[cfg(target_os = "linux")]
-fn run_isolated_child<T>(apply_sandbox: bool, task: T) -> Result<String, String>
+fn run_isolated_child<T>(apply_seccomp_filter: bool, task: T) -> Result<String, String>
 where
     T: FnOnce() -> Result<String, String> + Send + 'static,
 {
@@ -125,11 +125,8 @@ where
     if pid == 0 {
         // Child.
         let _ = unsafe { libc::close(fds[0]) };
-        let status = if let Err(err) = if apply_sandbox {
-            sandbox_setup()
-        } else {
-            Ok(())
-        } {
+        let status = if let Err(err) = sandbox_setup(apply_seccomp_filter) {
+            eprintln!("sandbox setup failed: {err}");
             let _ = write_all(fds[1], format!("sandbox setup failed: {err}").as_bytes());
             1
         } else {
@@ -141,6 +138,7 @@ where
                     0
                 }
                 Err(err) => {
+                    eprintln!("sandbox task failed: {err}");
                     let _ = write_all(fds[1], err.as_bytes());
                     1
                 }
@@ -178,12 +176,13 @@ where
 }
 
 #[cfg(target_os = "linux")]
-fn sandbox_setup() -> Result<(), String> {
-    apply_user_namespace()?;
+fn sandbox_setup(apply_seccomp_filter: bool) -> Result<(), String> {
     apply_no_new_privs()?;
-    drop_capabilities()?;
+    drop_capabilities_child_only()?;
     apply_rlimits()?;
-    apply_seccomp()?;
+    if apply_seccomp_filter {
+        apply_seccomp()?;
+    }
     Ok(())
 }
 
@@ -194,13 +193,16 @@ pub fn apply_no_new_privs() -> Result<(), String> {
 }
 
 #[cfg(target_os = "linux")]
+#[allow(dead_code)]
 pub fn is_no_new_privs_set() -> Result<bool, String> {
     let rc = prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0)?;
     Ok(rc == 1)
 }
 
 #[cfg(target_os = "linux")]
-pub fn drop_capabilities() -> Result<(), String> {
+fn drop_capabilities_child_only() -> Result<(), String> {
+    // Child process is single-threaded after fork; safe point for dropping all
+    // Linux capabilities in one atomic step.
     let mut header = CapHeader {
         version: _LINUX_CAPABILITY_VERSION_3,
         pid: 0,
@@ -210,6 +212,13 @@ pub fn drop_capabilities() -> Result<(), String> {
         permitted: 0,
         inheritable: 0,
     }; _LINUX_CAPABILITY_U32S_3];
+
+    // Lock securebits: prevent root from re-gaining capabilities
+    const SECBITS: libc::c_ulong = 0x2f;
+    let rc = unsafe { libc::prctl(libc::PR_SET_SECUREBITS, SECBITS, 0, 0, 0) };
+    if rc < 0 {
+        return Err(to_io_error("prctl(PR_SET_SECUREBITS) failed"));
+    }
 
     let rc = unsafe { libc::syscall(libc::SYS_capset, &mut header, data.as_mut_ptr()) };
     if rc < 0 {
@@ -255,10 +264,23 @@ pub fn apply_rlimits() -> Result<(), String> {
 }
 
 #[cfg(target_os = "linux")]
+#[allow(dead_code)]
 pub fn apply_user_namespace() -> Result<(), String> {
     if unsafe { libc::unshare(libc::CLONE_NEWUSER) } < 0 {
         return Err(format!(
             "unshare(CLONE_NEWUSER) failed: {}",
+            io::Error::last_os_error()
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[allow(dead_code)]
+pub fn apply_network_namespace() -> Result<(), String> {
+    if unsafe { libc::unshare(libc::CLONE_NEWNET) } < 0 {
+        return Err(format!(
+            "unshare(CLONE_NEWNET) failed: {}",
             io::Error::last_os_error()
         ));
     }
@@ -364,11 +386,21 @@ pub fn run_sandboxed_skill(
 }
 
 #[cfg(target_os = "linux")]
+#[allow(dead_code)]
 pub fn run_probe_task<T>(task: T) -> Result<String, String>
 where
     T: FnOnce() -> Result<String, String> + Send + 'static,
 {
     run_isolated_child(true, task)
+}
+
+#[cfg(target_os = "linux")]
+#[allow(dead_code)]
+pub fn run_probe_task_without_seccomp<T>(task: T) -> Result<String, String>
+where
+    T: FnOnce() -> Result<String, String> + Send + 'static,
+{
+    run_isolated_child(false, task)
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -378,6 +410,15 @@ where
     T: FnOnce() -> Result<String, String> + Send + 'static,
 {
     Err("sandbox probes are Linux-only".to_string())
+}
+
+#[cfg(not(target_os = "linux"))]
+#[allow(dead_code)]
+pub fn run_probe_task_without_seccomp<T>(task: T) -> Result<String, String>
+where
+    T: FnOnce() -> Result<String, String> + Send + 'static,
+{
+    task()
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -394,17 +435,12 @@ pub fn is_no_new_privs_set() -> Result<bool, String> {
 
 #[cfg(not(target_os = "linux"))]
 #[allow(dead_code)]
-pub fn drop_capabilities() -> Result<(), String> {
-    Ok(())
-}
-
-#[cfg(not(target_os = "linux"))]
-#[allow(dead_code)]
 pub fn apply_rlimits() -> Result<(), String> {
     Ok(())
 }
 
 #[cfg(not(target_os = "linux"))]
+#[allow(dead_code)]
 #[allow(dead_code)]
 pub fn apply_user_namespace() -> Result<(), String> {
     Ok(())

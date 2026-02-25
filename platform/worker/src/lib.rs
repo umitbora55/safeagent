@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tokio::time::sleep;
 use tokio_rustls::TlsAcceptor;
+use url::Url;
 use uuid::Uuid;
 
 use safeagent_shared_identity::Claims;
@@ -33,6 +34,7 @@ use safeagent_shared_proto::{
     ApprovalRequest, ApprovalRequestResponse, ApprovalStatusResponse, ExecuteRequest,
 };
 
+pub mod network_policy;
 mod sandbox;
 
 #[derive(Clone)]
@@ -42,6 +44,7 @@ pub struct WorkerState {
     pub control_plane_url: Option<String>,
     pub control_plane_client: Option<Arc<rustls::ClientConfig>>,
     pub approval_timeout_secs: u64,
+    pub egress_policy: network_policy::NetworkPolicy,
 }
 
 impl WorkerState {
@@ -52,6 +55,7 @@ impl WorkerState {
             control_plane_url: None,
             control_plane_client: None,
             approval_timeout_secs: DEFAULT_APPROVAL_TIMEOUT_SECONDS,
+            egress_policy: network_policy::NetworkPolicy::default(),
         }
     }
 
@@ -61,18 +65,39 @@ impl WorkerState {
         control_plane_client: rustls::ClientConfig,
         approval_timeout_secs: u64,
     ) -> Self {
+        Self::with_control_plane_and_policy(
+            verifier,
+            control_plane_url,
+            control_plane_client,
+            approval_timeout_secs,
+            network_policy::NetworkPolicy::from_env(),
+        )
+    }
+
+    pub fn with_control_plane_and_policy(
+        verifier: Arc<dyn TokenVerifier + Send + Sync>,
+        control_plane_url: String,
+        control_plane_client: rustls::ClientConfig,
+        approval_timeout_secs: u64,
+        egress_policy: network_policy::NetworkPolicy,
+    ) -> Self {
         Self {
             verifier,
             used_nonces: Arc::new(DashMap::new()),
             control_plane_url: Some(control_plane_url),
             control_plane_client: Some(Arc::new(control_plane_client)),
             approval_timeout_secs,
+            egress_policy,
         }
     }
 }
 
 const DEFAULT_APPROVAL_TIMEOUT_SECONDS: u64 = 30;
 const DEFAULT_APPROVAL_POLL_INTERVAL_MILLIS: u64 = 250;
+
+fn ensure_default_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
 
 pub trait TokenVerifier {
     fn verify(&self, token: &str, required_scope: &str) -> Result<Claims, String>;
@@ -251,23 +276,40 @@ async fn execute(
         }
     }
 
-    let output = match sandbox::run_sandboxed_skill(&req.skill_id, &req.input, &req.request_id) {
-        Ok(output) => output,
-        Err(err) => {
-            let status = if err == "unknown skill" {
-                StatusCode::BAD_REQUEST
-            } else {
-                StatusCode::INTERNAL_SERVER_ERROR
-            };
-            return (
-                status,
-                Json(ExecuteResponse {
-                    ok: false,
-                    output: String::new(),
-                    error: Some(err),
-                    audit_id: None,
-                }),
-            );
+    let output = if req.skill_id == "url_fetch" {
+        match execute_network_fetch(&req.input, &state.egress_policy).await {
+            Ok(output) => output,
+            Err(err) => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(ExecuteResponse {
+                        ok: false,
+                        output: String::new(),
+                        error: Some(err),
+                        audit_id: None,
+                    }),
+                )
+            }
+        }
+    } else {
+        match sandbox::run_sandboxed_skill(&req.skill_id, &req.input, &req.request_id) {
+            Ok(output) => output,
+            Err(err) => {
+                let status = if err == "unknown skill" {
+                    StatusCode::BAD_REQUEST
+                } else {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                };
+                return (
+                    status,
+                    Json(ExecuteResponse {
+                        ok: false,
+                        output: String::new(),
+                        error: Some(err),
+                        audit_id: None,
+                    }),
+                );
+            }
         }
     };
 
@@ -280,6 +322,40 @@ async fn execute(
             audit_id: Some(req.request_id),
         }),
     )
+}
+
+pub async fn execute_network_fetch(
+    input: &str,
+    policy: &network_policy::NetworkPolicy,
+) -> Result<String, String> {
+    network_policy::enforce_on_request(policy, input)?;
+    let target = Url::parse(input).map_err(|err| format!("invalid url: {err}"))?;
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|err| format!("egress client init failed: {err}"))?;
+    let response = client
+        .head(target.as_str())
+        .send()
+        .await
+        .map_err(|err| format!("egress request failed: {err}"))?;
+    if let Some(location) = response
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .and_then(|value| value.to_str().ok())
+    {
+        if network_policy::validate_redirect_target(policy, target.as_str(), location).is_err() {
+            return Err("redirect target denied by egress policy".to_string());
+        }
+    }
+    let status = response.status();
+    if !status.is_success() && !status.is_redirection() {
+        return Err(format!("egress request rejected: {status}"));
+    }
+    if status.is_redirection() {
+        return Err("redirect denied".to_string());
+    }
+    Ok(format!("egress ok: {status}"))
 }
 
 fn approval_timeout(state: &WorkerState) -> Duration {
@@ -424,6 +500,8 @@ pub fn build_server_config(
     server_certs: Vec<CertificateDer<'static>>,
     key: PrivateKeyDer<'static>,
 ) -> Result<ServerConfig, String> {
+    ensure_default_crypto_provider();
+
     let mut roots = RootCertStore::empty();
     for cert in ca_certs {
         roots
@@ -637,46 +715,78 @@ mod tests {
 
         #[test]
         fn test_no_new_privs_set() {
-            sandbox::apply_no_new_privs().expect("apply_no_new_privs");
-            assert!(sandbox::is_no_new_privs_set().expect("read_no_new_privs"));
+            let output = sandbox::run_probe_task_without_seccomp(|| {
+                if sandbox::is_no_new_privs_set().map_err(|err| err.to_string())? {
+                    Ok("true".to_string())
+                } else {
+                    Err("no_new_privs is not set in child".to_string())
+                }
+            })
+            .expect("child no_new_privs probe");
+            assert_eq!(output, "true");
         }
 
         #[test]
         fn test_capabilities_dropped() {
-            sandbox::drop_capabilities().expect("drop_capabilities");
-
-            let status = fs::read_to_string("/proc/self/status").expect("read /proc/self/status");
-            let cap_eff_line = status
-                .lines()
-                .find(|line| line.starts_with("CapEff:"))
-                .expect("CapEff line exists");
-            let hex = cap_eff_line.split_whitespace().nth(1).expect("cap field");
-            let value: u128 = u128::from_str_radix(hex, 16).expect("parse CapEff");
-
-            assert_eq!(value, 0);
+            let output = sandbox::run_probe_task_without_seccomp(|| {
+                let status =
+                    fs::read_to_string("/proc/self/status").map_err(|err| err.to_string())?;
+                let cap_eff_line = status
+                    .lines()
+                    .find(|line| line.starts_with("CapEff:"))
+                    .ok_or_else(|| "CapEff line missing".to_string())?;
+                let hex = cap_eff_line
+                    .split_whitespace()
+                    .nth(1)
+                    .ok_or_else(|| "CapEff value missing".to_string())?;
+                let value = u128::from_str_radix(hex, 16)
+                    .map_err(|_| format!("CapEff parse failure: {hex}"))?;
+                if value == 0 {
+                    Ok("0".to_string())
+                } else {
+                    Err(format!("CapEff not zero: {hex}"))
+                }
+            })
+            .expect("child capabilities probe");
+            assert_eq!(output, "0");
         }
 
         #[test]
         fn test_rlimit_enforced() {
-            sandbox::apply_rlimits().expect("apply_rlimits");
+            let output = sandbox::run_probe_task_without_seccomp(|| {
+                let mut limit = libc::rlimit {
+                    rlim_cur: 0,
+                    rlim_max: 0,
+                };
+                unsafe {
+                    assert!(libc::getrlimit(libc::RLIMIT_CPU, &mut limit) == 0);
+                    if limit.rlim_cur != 2 || limit.rlim_max != 2 {
+                        return Err(format!(
+                            "RLIMIT_CPU mismatch: cur={}, max={}",
+                            limit.rlim_cur, limit.rlim_max
+                        ));
+                    }
 
-            let mut limit = libc::rlimit {
-                rlim_cur: 0,
-                rlim_max: 0,
-            };
-            unsafe {
-                assert!(libc::getrlimit(libc::RLIMIT_CPU, &mut limit) == 0);
-                assert_eq!(limit.rlim_cur, 2);
-                assert_eq!(limit.rlim_max, 2);
+                    assert!(libc::getrlimit(libc::RLIMIT_AS, &mut limit) == 0);
+                    if limit.rlim_cur != 256 * 1024 * 1024 || limit.rlim_max != 256 * 1024 * 1024 {
+                        return Err(format!(
+                            "RLIMIT_AS mismatch: cur={}, max={}",
+                            limit.rlim_cur, limit.rlim_max
+                        ));
+                    }
 
-                assert!(libc::getrlimit(libc::RLIMIT_AS, &mut limit) == 0);
-                assert_eq!(limit.rlim_cur, 256 * 1024 * 1024);
-                assert_eq!(limit.rlim_max, 256 * 1024 * 1024);
-
-                assert!(libc::getrlimit(libc::RLIMIT_FSIZE, &mut limit) == 0);
-                assert_eq!(limit.rlim_cur, 10 * 1024 * 1024);
-                assert_eq!(limit.rlim_max, 10 * 1024 * 1024);
-            }
+                    assert!(libc::getrlimit(libc::RLIMIT_FSIZE, &mut limit) == 0);
+                    if limit.rlim_cur != 10 * 1024 * 1024 || limit.rlim_max != 10 * 1024 * 1024 {
+                        return Err(format!(
+                            "RLIMIT_FSIZE mismatch: cur={}, max={}",
+                            limit.rlim_cur, limit.rlim_max
+                        ));
+                    }
+                }
+                Ok("rlimits ok".to_string())
+            })
+            .expect("child rlimit probe");
+            assert_eq!(output, "rlimits ok");
         }
 
         #[test]
@@ -689,7 +799,7 @@ mod tests {
 
                 Err(format!(
                     "ptrace blocked with os err: {}",
-                    std::io::Error::last_os_error().to_string()
+                    std::io::Error::last_os_error()
                 ))
             })
             .expect_err("ptrace should fail under seccomp");
