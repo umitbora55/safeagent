@@ -16,12 +16,18 @@ data/
 # local artifacts
 metadata.json
 tree.txt
+sdk/ts/node_modules/
+sdk/ts/dist/
 
 # pki secrets
 platform/pki/*.key
 platform/pki/*_key.pem
 platform/pki/*.pem
 platform/pki/*.p12
+platform/control-plane/.keys
+platform/control-plane/.keys/**
+platform/control-plane/.secrets
+platform/control-plane/.secrets/**
 
 # allow public certs only if needed
 !platform/pki/*.crt

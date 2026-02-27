@@ -1,0 +1,92 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/gateway",
+    "crates/bridges/common",
+    "crates/bridges/telegram",
+    "crates/policy-engine",
+    "crates/prompt-guard",
+    "crates/llm-router",
+    "crates/credential-vault",
+    "crates/memory",
+    "crates/cost-ledger",
+    "crates/audit-log",
+    "crates/skills",
+    "crates/web-ui",
+    "crates/multi-user",
+    "crates/capability-tokens",
+    "crates/telemetry",
+    "crates/stride-testgen",
+    "crates/policy-conformance-runner",
+    "crates/security-harness",
+    "desktop",
+    # W5-W8 new crates
+    "crates/cedar-bridge",
+    "crates/kill-switch",
+    "crates/ueba",
+    "crates/wasm-sandbox",
+    "crates/intent-authz",
+    "crates/delegation",
+    "crates/sigstore-bridge",
+    "crates/threshold-sig",
+    "crates/slo",
+    # W9-W18 new crates
+    "crates/a2a-gateway",
+    "crates/rebac",
+    "crates/guardrails",
+    "crates/fleet",
+    "crates/policy-compiler",
+    "crates/threat-intel",
+    "crates/deploy",
+    "crates/marketplace",
+    # W19-W28 new crates
+    "crates/mcp-security",
+    "crates/dep-graph",
+    "crates/identity-fabric",
+    "crates/prob-verify",
+    "crates/pq-crypto",
+    "crates/agent-mesh",
+    "crates/confidential-compute",
+    "crates/supply-chain",
+    "crates/security-validation",
+    "crates/privacy-intel",
+    # W29-W48 new crates
+    "crates/advanced-guardrails",
+    "crates/cross-protocol-authz",
+    "crates/agentic-trust",
+    "crates/compliance-engine",
+    "crates/otel-genai",
+    "crates/nl-policy-studio",
+    "crates/standards-ecosystem",
+    "crates/guardian-sidecar",
+    "crates/nhi-governance",
+    "crates/openfga-scale",
+    "crates/cbra-scoring",
+    "crates/nanda-discovery",
+    "crates/sae-safety-probes",
+    "crates/spotlighting-defense",
+    "crates/cost-attribution",
+    "crates/counterfactual-explain",
+    "crates/cross-jurisdiction",
+    "crates/competitive-gap",
+    "crates/csa-star-toolkit",
+    "crates/unified-control-plane",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+thiserror = "1"
+dashmap = "6"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }

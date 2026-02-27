@@ -1,0 +1,33 @@
+[package]
+name = "safeagent-desktop"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tauri          = { version = "2", features = ["tray-icon", "devtools"] }
+tauri-plugin-shell        = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-autostart    = "2"
+tauri-plugin-process      = "2"
+serde          = { version = "1", features = ["derive"] }
+serde_json     = "1"
+tokio          = { version = "1", features = ["full"] }
+anyhow         = "1"
+reqwest        = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
+chrono         = { version = "0.4", features = ["serde"] }
+uuid           = { version = "1", features = ["v4"] }
+directories    = "5"
+tracing        = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# SafeAgent security crates
+safeagent-bridge-common    = { path = "../crates/bridges/common" }
+safeagent-credential-vault = { path = "../crates/credential-vault" }
+safeagent-memory           = { path = "../crates/memory" }
+safeagent-cost-ledger      = { path = "../crates/cost-ledger" }
+safeagent-audit-log        = { path = "../crates/audit-log" }
+safeagent-prompt-guard     = { path = "../crates/prompt-guard" }
+safeagent-policy-engine    = { path = "../crates/policy-engine" }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

@@ -1,0 +1,106 @@
+[package]
+name = "safeagent-gateway"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "safeagent_gateway"
+path = "src/lib.rs"
+
+[[bin]]
+name = "safeagent"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+async-trait = "0.1"
+aes-gcm = "0.10"
+argon2 = "0.5"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+directories = "5"
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
+futures-util = "0.3"
+clap = { version = "4", features = ["derive"] }
+toml = "0.8"
+
+safeagent-bridge-common = { path = "../bridges/common" }
+safeagent-policy-engine = { path = "../policy-engine" }
+safeagent-prompt-guard = { path = "../prompt-guard" }
+safeagent-llm-router = { path = "../llm-router" }
+safeagent-credential-vault = { path = "../credential-vault" }
+safeagent-memory = { path = "../memory" }
+safeagent-bridge-telegram = { path = "../bridges/telegram" }
+safeagent-cost-ledger = { path = "../cost-ledger" }
+safeagent-audit-log = { path = "../audit-log" }
+safeagent-skills = { path = "../skills" }
+safeagent-web-ui = { path = "../web-ui" }
+safeagent-cedar-bridge = { path = "../cedar-bridge" }
+safeagent-kill-switch = { path = "../kill-switch" }
+safeagent-ueba = { path = "../ueba" }
+safeagent-telemetry = { path = "../telemetry" }
+safeagent-wasm-sandbox = { path = "../wasm-sandbox" }
+safeagent-intent-authz = { path = "../intent-authz" }
+safeagent-delegation = { path = "../delegation" }
+safeagent-slo = { path = "../slo" }
+# W9-W18 new crates
+safeagent-a2a-gateway = { path = "../a2a-gateway" }
+safeagent-rebac = { path = "../rebac" }
+safeagent-guardrails = { path = "../guardrails" }
+safeagent-fleet = { path = "../fleet" }
+safeagent-policy-compiler = { path = "../policy-compiler" }
+safeagent-threat-intel = { path = "../threat-intel" }
+safeagent-deploy = { path = "../deploy" }
+safeagent-marketplace = { path = "../marketplace" }
+# W19-W28 new crates
+safeagent-mcp-security = { path = "../mcp-security" }
+safeagent-dep-graph = { path = "../dep-graph" }
+safeagent-identity-fabric = { path = "../identity-fabric" }
+safeagent-prob-verify = { path = "../prob-verify" }
+safeagent-pq-crypto = { path = "../pq-crypto" }
+safeagent-agent-mesh = { path = "../agent-mesh" }
+safeagent-confidential-compute = { path = "../confidential-compute" }
+safeagent-supply-chain = { path = "../supply-chain" }
+safeagent-security-validation = { path = "../security-validation" }
+safeagent-privacy-intel = { path = "../privacy-intel" }
+# W29-W48 new crates
+safeagent-advanced-guardrails = { path = "../advanced-guardrails" }
+safeagent-cross-protocol-authz = { path = "../cross-protocol-authz" }
+safeagent-agentic-trust = { path = "../agentic-trust" }
+safeagent-compliance-engine = { path = "../compliance-engine" }
+safeagent-otel-genai = { path = "../otel-genai" }
+safeagent-nl-policy-studio = { path = "../nl-policy-studio" }
+safeagent-standards-ecosystem = { path = "../standards-ecosystem" }
+safeagent-guardian-sidecar = { path = "../guardian-sidecar" }
+safeagent-nhi-governance = { path = "../nhi-governance" }
+safeagent-openfga-scale = { path = "../openfga-scale" }
+safeagent-cbra-scoring = { path = "../cbra-scoring" }
+safeagent-nanda-discovery = { path = "../nanda-discovery" }
+safeagent-sae-safety-probes = { path = "../sae-safety-probes" }
+safeagent-spotlighting-defense = { path = "../spotlighting-defense" }
+safeagent-cost-attribution = { path = "../cost-attribution" }
+safeagent-counterfactual-explain = { path = "../counterfactual-explain" }
+safeagent-cross-jurisdiction = { path = "../cross-jurisdiction" }
+safeagent-competitive-gap = { path = "../competitive-gap" }
+safeagent-csa-star-toolkit = { path = "../csa-star-toolkit" }
+safeagent-unified-control-plane = { path = "../unified-control-plane" }
+dashmap.workspace = true
+
+[[bin]]
+name = "eval_routing"
+path = "../../eval/eval_routing.rs"
+
+
+[dev-dependencies]
+safeagent-multi-user = { path = "../multi-user" }
+aes-gcm = "0.10"
+async-trait = "0.1"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

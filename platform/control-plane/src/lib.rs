@@ -4,12 +4,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::extract::{Extension, Query, State};
 use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use dashmap::DashMap;
-use ed25519_dalek::Signer;
+use ed25519_dalek::{Signer, SigningKey};
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::server::conn::http1;
@@ -27,13 +28,25 @@ use tokio::net::TcpListener;
 use tokio::time::sleep;
 use tokio_rustls::TlsAcceptor;
 
-use safeagent_shared_identity::{cert_fingerprint_sha256, node_id_from_cert, Claims, NodeId};
+use safeagent_shared_identity::{
+    cert_fingerprint_sha256, node_id_from_cert, Claims, NodeId, TenantId, UserId,
+};
 use safeagent_shared_proto::{
     ApprovalDecisionRequest, ApprovalDecisionResponse, ApprovalRequest, ApprovalRequestResponse,
     ApprovalStatusResponse, ControlPlaneExecuteRequest, ExecuteRequest, ExecuteResponse,
-    IssueTokenRequest, IssueTokenResponse, WorkerRegisterRequest, WorkerRegisterResponse,
+    IssueTokenRequest, IssueTokenResponse, Jwks, RotateKeysResponse, WorkerRegisterRequest,
+    WorkerRegisterResponse,
 };
+use std::sync::Mutex;
 use uuid::Uuid;
+
+pub use keys::{KeyRecord, KeyStatus, KeyStore};
+pub use rate_limiter::{
+    RateLimitError, RateLimitErrorBody, TenantRateLimitConfig, TenantRateLimiter,
+};
+
+mod keys;
+mod rate_limiter;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthResponse {
@@ -53,9 +66,11 @@ pub struct WorkerInfo {
 pub struct AppState {
     pub registry: Arc<DashMap<NodeId, WorkerInfo>>,
     pub token_issuer: Arc<dyn TokenIssuer + Send + Sync>,
+    pub key_store: Arc<Mutex<KeyStore>>,
     pub worker_client: Arc<ClientConfig>,
     pub approvals: Arc<DashMap<String, ApprovalRecord>>,
     pub approval_timeout_secs: u64,
+    pub rate_limiter: Arc<TenantRateLimiter>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,9 +104,96 @@ pub struct PeerCert {
 pub const DEFAULT_TOKEN_TTL_SECONDS: u64 = 60;
 pub const MAX_TOKEN_TTL_SECONDS: u64 = 300;
 pub const DEFAULT_APPROVAL_TIMEOUT_SECONDS: u64 = 30;
+pub const DEFAULT_TENANT_CONCURRENT_LIMIT: usize = 1000;
+pub const DEFAULT_TENANT_QUEUE_LIMIT: usize = 1000;
+pub const DEFAULT_TENANT_TOKEN_BUCKET_CAPACITY: u64 = 10_000;
+pub const DEFAULT_TENANT_TOKEN_BUCKET_REFILL_PER_SECOND: u64 = 10_000;
+pub const DEFAULT_TENANT_COST_BUDGET: u64 = 1_000_000;
+
+fn ensure_default_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
 
 pub trait TokenIssuer {
-    fn issue(&self, subject: &str, scopes: Vec<String>, ttl_secs: u64) -> Result<String, String>;
+    fn issue(
+        &self,
+        subject: &str,
+        tenant_id: TenantId,
+        scopes: Vec<String>,
+        ttl_secs: u64,
+    ) -> Result<String, String>;
+}
+
+pub struct RotatingTokenIssuer {
+    key_store: Arc<Mutex<KeyStore>>,
+    default_ttl: u64,
+    max_ttl: u64,
+}
+
+impl RotatingTokenIssuer {
+    pub fn new(key_store: Arc<Mutex<KeyStore>>, default_ttl: u64, max_ttl: u64) -> Self {
+        Self {
+            key_store,
+            default_ttl,
+            max_ttl,
+        }
+    }
+}
+
+impl TokenIssuer for RotatingTokenIssuer {
+    fn issue(
+        &self,
+        subject: &str,
+        tenant_id: TenantId,
+        scopes: Vec<String>,
+        ttl_secs: u64,
+    ) -> Result<String, String> {
+        let ttl = if ttl_secs == 0 {
+            self.default_ttl
+        } else {
+            ttl_secs
+        };
+        if ttl > self.max_ttl {
+            return Err(format!("ttl exceeds max limit of {} seconds", self.max_ttl));
+        }
+        if scopes.is_empty() {
+            return Err("missing scopes".to_string());
+        }
+
+        let now = now_unix_secs()?;
+        let mut store = self
+            .key_store
+            .lock()
+            .map_err(|_| "key store lock poisoned".to_string())?;
+        let (active_kid, private_key) = store.active_signing_key()?;
+        let private_key = SigningKey::from_bytes(&private_key);
+        let claims = Claims {
+            sub: subject.to_string(),
+            tenant_id,
+            user_id: UserId("default".to_string()),
+            scopes,
+            kid: active_kid.clone(),
+            exp: now + ttl,
+            nbf: now,
+            iat: now,
+            nonce: format!("{}:{}:{}", subject, now, Uuid::new_v4()),
+        };
+
+        let header = serde_json::json!({"alg":"EdDSA","kid":active_kid});
+        let header = serde_json::to_vec(&header)
+            .map_err(|e| format!("Failed to encode token header: {e}"))?;
+        let header = URL_SAFE_NO_PAD.encode(header);
+        let payload =
+            serde_json::to_vec(&claims).map_err(|e| format!("Failed to encode claims: {e}"))?;
+        let payload = URL_SAFE_NO_PAD.encode(payload);
+        let signature = private_key.sign(payload.as_bytes());
+        Ok(format!(
+            "{}.{}.{}",
+            header,
+            payload,
+            URL_SAFE_NO_PAD.encode(signature.to_bytes())
+        ))
+    }
 }
 
 #[derive(Clone)]
@@ -116,7 +218,13 @@ impl Ed25519TokenIssuer {
 }
 
 impl TokenIssuer for Ed25519TokenIssuer {
-    fn issue(&self, subject: &str, scopes: Vec<String>, ttl_secs: u64) -> Result<String, String> {
+    fn issue(
+        &self,
+        subject: &str,
+        tenant_id: TenantId,
+        scopes: Vec<String>,
+        ttl_secs: u64,
+    ) -> Result<String, String> {
         let ttl = if ttl_secs == 0 {
             DEFAULT_TOKEN_TTL_SECONDS
         } else {
@@ -135,20 +243,28 @@ impl TokenIssuer for Ed25519TokenIssuer {
         let now = now_unix_secs()?;
         let claims = Claims {
             sub: subject.to_string(),
-            tenant_id: safeagent_shared_identity::TenantId("default".to_string()),
-            user_id: safeagent_shared_identity::UserId("default".to_string()),
+            tenant_id,
+            user_id: UserId("default".to_string()),
             scopes,
+            kid: String::new(),
             exp: now + ttl,
             nbf: now,
-            nonce: format!("{}:{}", subject, now),
+            iat: now,
+            nonce: format!("{}:{}:{}", subject, now, Uuid::new_v4()),
         };
 
         let payload =
             serde_json::to_vec(&claims).map_err(|e| format!("Failed to encode claims: {}", e))?;
-        let signature = self.signing_key.sign(&payload);
+        let header = serde_json::json!({"alg":"EdDSA","kid":""});
+        let header = serde_json::to_vec(&header)
+            .map_err(|e| format!("Failed to encode token header: {}", e))?;
+        let header = URL_SAFE_NO_PAD.encode(header);
+        let payload_b64 = URL_SAFE_NO_PAD.encode(payload);
+        let signature = self.signing_key.sign(payload_b64.as_bytes());
         Ok(format!(
-            "{}.{}",
-            URL_SAFE_NO_PAD.encode(payload),
+            "{}.{}.{}",
+            header,
+            payload_b64,
             URL_SAFE_NO_PAD.encode(signature.to_bytes())
         ))
     }
@@ -159,6 +275,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/register", post(register))
         .route("/issue-token", post(issue_token))
+        .route("/jwks", get(jwks))
+        .route("/admin/rotate-keys", post(rotate_keys))
         .route("/execute", post(execute))
         .route("/approval/request", post(request_approval))
         .route("/approval/pending", get(list_pending_approvals))
@@ -172,6 +290,8 @@ pub fn build_server_config(
     server_certs: Vec<CertificateDer<'static>>,
     key: PrivateKeyDer<'static>,
 ) -> Result<ServerConfig, String> {
+    ensure_default_crypto_provider();
+
     use rustls::server::WebPkiClientVerifier;
 
     let mut roots = RootCertStore::empty();
@@ -195,6 +315,8 @@ pub fn build_client_config(
     cert_path: &str,
     key_path: &str,
 ) -> Result<ClientConfig, String> {
+    ensure_default_crypto_provider();
+
     let mut roots = RootCertStore::empty();
     for cert in load_certs(ca_path)? {
         roots
@@ -310,9 +432,98 @@ async fn issue_token(
     };
     let token = state
         .token_issuer
-        .issue(&req.subject, req.scopes, ttl)
+        .issue(
+            &req.subject,
+            TenantId("default".to_string()),
+            req.scopes,
+            ttl,
+        )
         .map_err(|_| StatusCode::BAD_REQUEST)?;
     Ok(Json(IssueTokenResponse { token }))
+}
+
+fn rate_limit_to_response(error: RateLimitError) -> Response {
+    let status = error.status;
+    let body = error.into_body();
+    (status, Json(body)).into_response()
+}
+
+async fn jwks(State(state): State<AppState>) -> (StatusCode, Json<Jwks>) {
+    let mut store = match state.key_store.lock() {
+        Ok(store) => store,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(Jwks { keys: Vec::new() }),
+            )
+        }
+    };
+    match store.public_jwks() {
+        Ok(jwks) => (StatusCode::OK, Json(jwks)),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(Jwks { keys: Vec::new() }),
+        ),
+    }
+}
+
+async fn rotate_keys(
+    Extension(peer): Extension<PeerCert>,
+    State(state): State<AppState>,
+) -> (StatusCode, Json<RotateKeysResponse>) {
+    if !is_rotation_authorized(&peer) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(RotateKeysResponse {
+                active_kid: String::new(),
+                rotated_kid: String::new(),
+            }),
+        );
+    }
+
+    let (active_kid, rotated_kid) = match state.key_store.lock() {
+        Ok(mut store) => {
+            let previous_active: String = store.active_key_kid().unwrap_or_default();
+            match store.rotate() {
+                Ok(_) => {
+                    let active_kid = store.active_key_kid().unwrap_or_default();
+                    let rotated_kid = if previous_active.is_empty() {
+                        active_kid.clone()
+                    } else {
+                        previous_active
+                    };
+                    (active_kid, rotated_kid)
+                }
+                Err(_) => (String::new(), String::new()),
+            }
+        }
+        Err(_) => (String::new(), String::new()),
+    };
+    if active_kid.is_empty() || rotated_kid.is_empty() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(RotateKeysResponse {
+                active_kid: String::new(),
+                rotated_kid: String::new(),
+            }),
+        );
+    }
+    (
+        StatusCode::OK,
+        Json(RotateKeysResponse {
+            active_kid,
+            rotated_kid,
+        }),
+    )
+}
+
+fn is_rotation_authorized(peer: &PeerCert) -> bool {
+    let allow_all =
+        std::env::var("CONTROL_PLANE_ROTATE_KEYS_ALLOW_ALL").unwrap_or_else(|_| "1".to_string());
+    if allow_all == "0" {
+        return peer.der.is_some();
+    }
+    peer.der.is_some()
 }
 
 fn decision_to_status(decision: &str) -> Option<ApprovalStatus> {
@@ -544,8 +755,10 @@ pub fn spawn_approval_maintenance(state: &AppState) {
 
 async fn execute(
     State(state): State<AppState>,
+    Extension(peer): Extension<PeerCert>,
     Json(req): Json<ControlPlaneExecuteRequest>,
-) -> (StatusCode, Json<ExecuteResponse>) {
+) -> Response {
+    let _ = peer;
     let worker = match state.registry.iter().next() {
         Some(entry) => entry.value().clone(),
         None => {
@@ -557,17 +770,30 @@ async fn execute(
                     error: Some("no worker registered".to_string()),
                     audit_id: None,
                 }),
-            );
+            )
+                .into_response();
         }
     };
 
+    let permit = match state.rate_limiter.allow_request(&req.tenant_id) {
+        Ok(permit) => permit,
+        Err(err) => return rate_limit_to_response(err),
+    };
+    if let Err(err) = state.rate_limiter.charge_cost(&req.tenant_id, 1) {
+        drop(permit);
+        return rate_limit_to_response(err);
+    }
+
     let scope = format!("skill:{}", req.skill_id);
-    let token = match state
-        .token_issuer
-        .issue(&req.subject, vec![scope], DEFAULT_TOKEN_TTL_SECONDS)
-    {
+    let token = match state.token_issuer.issue(
+        &req.subject,
+        req.tenant_id.clone(),
+        vec![scope],
+        DEFAULT_TOKEN_TTL_SECONDS,
+    ) {
         Ok(token) => token,
         Err(err) => {
+            drop(permit);
             return (
                 StatusCode::BAD_REQUEST,
                 Json(ExecuteResponse {
@@ -576,12 +802,14 @@ async fn execute(
                     error: Some(err),
                     audit_id: None,
                 }),
-            );
+            )
+                .into_response();
         }
     };
 
     let execute_req = ExecuteRequest {
         token,
+        tenant_id: req.tenant_id,
         skill_id: req.skill_id,
         input: req.input,
         request_id: req.request_id,
@@ -589,6 +817,7 @@ async fn execute(
     let payload = match serde_json::to_vec(&execute_req) {
         Ok(v) => v,
         Err(err) => {
+            drop(permit);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ExecuteResponse {
@@ -597,7 +826,8 @@ async fn execute(
                     error: Some(format!("serialize worker request: {}", err)),
                     audit_id: None,
                 }),
-            );
+            )
+                .into_response();
         }
     };
 
@@ -613,9 +843,11 @@ async fn execute(
                 },
             };
             if status.is_success() {
-                (StatusCode::OK, Json(worker_resp))
+                drop(permit);
+                (StatusCode::OK, Json(worker_resp)).into_response()
             } else {
-                (status, Json(worker_resp))
+                drop(permit);
+                (status, Json(worker_resp)).into_response()
             }
         }
         Err(err) => (
@@ -626,7 +858,8 @@ async fn execute(
                 error: Some(err),
                 audit_id: None,
             }),
-        ),
+        )
+            .into_response(),
     }
 }
 
@@ -675,22 +908,62 @@ mod tests {
     use super::*;
     use axum::extract::State;
     use axum::Json;
+    use safeagent_shared_secrets::FileSecretStore;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     struct TestTokenIssuer;
 
     impl TokenIssuer for TestTokenIssuer {
-        fn issue(&self, _: &str, _: Vec<String>, _: u64) -> Result<String, String> {
+        fn issue(
+            &self,
+            _: &str,
+            tenant_id: TenantId,
+            _: Vec<String>,
+            _: u64,
+        ) -> Result<String, String> {
+            let _ = tenant_id;
             Ok("token".to_string())
         }
     }
 
     fn test_state(approval_timeout_secs: u64) -> AppState {
+        let secret_store_dir = std::env::temp_dir().join(format!(
+            "safeagent-control-plane-test-secrets-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&secret_store_dir);
+        let key_store_dir = std::env::temp_dir().join(format!(
+            "safeagent-control-plane-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&key_store_dir);
+        let key_store = Arc::new(std::sync::Mutex::new(
+            KeyStore::new(
+                key_store_dir,
+                std::sync::Arc::new(
+                    FileSecretStore::new(&secret_store_dir, "test-password")
+                        .expect("test secret store"),
+                ),
+                60 * 60,
+            )
+            .expect("test key store"),
+        ));
         AppState {
             registry: Arc::new(DashMap::new()),
             token_issuer: Arc::new(TestTokenIssuer),
+            key_store,
             worker_client: Arc::new(build_fake_client_config()),
             approvals: Arc::new(DashMap::new()),
             approval_timeout_secs,
+            rate_limiter: Arc::new(TenantRateLimiter::new(TenantRateLimitConfig::default())),
         }
     }
 

@@ -208,16 +208,114 @@ verify-v2:
     cargo clippy --manifest-path platform/control-plane/Cargo.toml --all-targets -- -D warnings
     cargo clippy --manifest-path platform/worker/Cargo.toml --all-targets -- -D warnings
     cargo clippy --manifest-path platform/shared/Cargo.toml --all-targets -- -D warnings
+    cargo clippy --manifest-path crates/sdk-rust/Cargo.toml --all-targets -- -D warnings
+    cargo clippy --manifest-path platform/worker/skills-sdk/Cargo.toml --all-targets -- -D warnings
+    cargo clippy --manifest-path platform/lab/jailbreak-fuzzer/Cargo.toml --all-targets -- -D warnings
+    cargo clippy --manifest-path platform/lab/context-poison-sim/Cargo.toml --all-targets -- -D warnings
+    cargo clippy --manifest-path platform/lab/diff-canary/Cargo.toml --all-targets -- -D warnings
     cargo test --manifest-path platform/control-plane/Cargo.toml
+    just rotation-e2e-v2
     just egress-tests-v2
     just sandbox-tests-v2
+    just rate-limit-tests-v2
     cargo test --manifest-path platform/shared/Cargo.toml
     just mtls-smoke-v2
     just approval-e2e-v2
+    just adversarial-check-v2
+    just poison-check-v2
+    just diff-check-v2
+    just replay-check-v2
+    just sdk-check-v2
+    just marketplace-check-v2
+    just registry-check-v2
+    just desktop-ux-check
+    just desktop-check
+    just desktop-release-check
+    just desktop-update-check
 
 verify-v2-log:
     mkdir -p logs
     just verify-v2 > logs/verify_v2_linux.log 2>&1
+
+demo-check:
+    scripts/demo_local.sh
+
+demo-check-log:
+    mkdir -p logs
+    just demo-check > logs/demo_check.log 2>&1
+
+desktop-check:
+    cargo build --manifest-path desktop/Cargo.toml
+    cargo test --manifest-path desktop/Cargo.toml
+
+desktop-check-log:
+    mkdir -p logs
+    just desktop-check > logs/desktop_check.log 2>&1
+
+desktop-release-check:
+    scripts/build_desktop_release.sh
+    just desktop-check
+    cargo test --manifest-path desktop/Cargo.toml -- --exact tests::settings_default_and_roundtrip tests::update_manifest_parse
+
+desktop-release-check-log:
+    mkdir -p logs
+    just desktop-release-check > logs/desktop_release_check.log 2>&1
+
+desktop-update-check:
+    scripts/publish_update_channel.sh
+    cargo test --manifest-path desktop/Cargo.toml
+
+desktop-update-check-log:
+    mkdir -p logs
+    just desktop-update-check > logs/desktop_update_check.log 2>&1
+
+desktop-ux-check:
+    cargo test --manifest-path desktop/Cargo.toml -- --exact tests::onboarding_state_machine
+    cargo test --manifest-path desktop/Cargo.toml -- --exact tests::event_human_mapping_is_stable
+    cargo test --manifest-path desktop/Cargo.toml -- --exact tests::tray_menu_items_exist
+
+desktop-ux-check-log:
+    mkdir -p logs
+    just desktop-ux-check > logs/desktop_ux_check.log 2>&1
+
+sdk-check-v2:
+    mkdir -p logs
+    cargo test --manifest-path crates/sdk-rust/Cargo.toml
+    cargo test --manifest-path platform/worker/skills-sdk/Cargo.toml
+    cargo build --manifest-path crates/sdk-rust/Cargo.toml --examples
+    cargo build --manifest-path platform/worker/skills-sdk/Cargo.toml --examples
+    (cd sdk/ts && npm install --no-audit --no-fund && \
+    npm run build; \
+    npm run typecheck)
+
+sdk-check-v2-log:
+    mkdir -p logs
+    just sdk-check-v2 > logs/sdk_check_v2.log 2>&1
+
+marketplace-check-v2:
+    @if [ "$(uname -s)" = "Linux" ] || [ "$(uname -s)" = "Darwin" ]; then \
+        cargo test --manifest-path crates/skill-registry/Cargo.toml; \
+    else \
+        echo "marketplace-check-v2: not supported on non-linux platforms"; \
+    fi
+
+marketplace-check-v2-log:
+    mkdir -p logs
+    just marketplace-check-v2 > logs/marketplace_check_v2.log 2>&1
+
+registry-check-v2:
+    cargo test --manifest-path crates/skill-registry-server/Cargo.toml
+
+registry-check-v2-log:
+    mkdir -p logs
+    just registry-check-v2 > logs/registry_check_v2.log 2>&1
+
+rotation-e2e-v2:
+    cargo test --manifest-path platform/control-plane/Cargo.toml --test mtls -- key_rotation_e2e
+
+rotation-e2e-v2-log:
+    mkdir -p logs
+    just rotation-e2e-v2 > logs/rotation_e2e_v2.log 2>&1
 
 sandbox-tests-v2:
     @if [ "$(uname -s)" = "Linux" ]; then \
@@ -245,6 +343,63 @@ egress-tests-v2:
 egress-tests-v2-log:
     mkdir -p logs
     just egress-tests-v2 > logs/egress_tests_v2_linux.log 2>&1
+
+rate-limit-tests-v2:
+    cargo test --manifest-path platform/control-plane/Cargo.toml --test mtls rate_limit -- --test-threads=1
+
+adversarial-check-v2:
+    mkdir -p logs
+    cargo run --manifest-path platform/lab/jailbreak-fuzzer/Cargo.toml -- \
+        --seed 0xC0FFEE \
+        --runs 200 \
+        --out logs/adversarial_findings_v2.jsonl \
+        --max-findings 0
+
+poison-check-v2:
+    mkdir -p logs
+    cargo run --manifest-path platform/lab/context-poison-sim/Cargo.toml -- \
+        --seed 0xC0FFEE \
+        --runs 200 \
+        --mode hybrid \
+        --out logs/context_poison_findings_v2.jsonl \
+        --max-findings 0
+
+diff-check-v2:
+    mkdir -p logs
+    cargo run --manifest-path platform/lab/diff-canary/Cargo.toml -- \
+        --seed 0xC0FFEE \
+        --runs 100 \
+        --mode mock \
+        --out logs/diff_canary_findings_v2.jsonl \
+        --max-divergence 0 \
+        --max-leaks 0
+
+replay-check-v2:
+    mkdir -p logs
+    cargo run --manifest-path platform/lab/exploit-replay/Cargo.toml -- \
+        --dataset platform/lab/regression-dataset/adversarial_regressions.jsonl \
+        --out logs/exploit_replay_failures_v2.jsonl \
+        --max-failures 0
+
+adversarial-check-v2-log:
+    mkdir -p logs
+    just adversarial-check-v2 > logs/adversarial_check_v2.log 2>&1
+
+poison-check-v2-log:
+    mkdir -p logs
+    just poison-check-v2 > logs/poison_check_v2_linux.log 2>&1
+
+diff-check-v2-log:
+    mkdir -p logs
+    just diff-check-v2 > logs/diff_check_v2_linux.log 2>&1
+
+replay-check-v2-log:
+    mkdir -p logs
+    just replay-check-v2 > logs/replay_check_v2_linux.log 2>&1
+
+rate-limit-tests-v2-log:
+    mkdir -p logs
+    just rate-limit-tests-v2 > logs/rate_limit_tests_v2.log 2>&1
 
 # mTLS smoke test for platform-v2
 mtls-smoke-v2:

@@ -7,7 +7,7 @@ use std::os::unix::io::RawFd;
 #[cfg(target_os = "linux")]
 const PR_SET_NO_NEW_PRIVS: libc::c_int = 38;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", test))]
 const PR_GET_NO_NEW_PRIVS: libc::c_int = 39;
 
 #[cfg(target_os = "linux")]
@@ -192,7 +192,7 @@ pub fn apply_no_new_privs() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", test))]
 #[allow(dead_code)]
 pub fn is_no_new_privs_set() -> Result<bool, String> {
     let rc = prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0)?;
@@ -385,7 +385,7 @@ pub fn run_sandboxed_skill(
     Ok(output)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", test))]
 #[allow(dead_code)]
 pub fn run_probe_task<T>(task: T) -> Result<String, String>
 where
@@ -394,7 +394,7 @@ where
     run_isolated_child(true, task)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", test))]
 #[allow(dead_code)]
 pub fn run_probe_task_without_seccomp<T>(task: T) -> Result<String, String>
 where
@@ -403,7 +403,7 @@ where
     run_isolated_child(false, task)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(not(target_os = "linux"), test))]
 #[allow(dead_code)]
 pub fn run_probe_task<T>(_task: T) -> Result<String, String>
 where
@@ -412,7 +412,7 @@ where
     Err("sandbox probes are Linux-only".to_string())
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(not(target_os = "linux"), test))]
 #[allow(dead_code)]
 pub fn run_probe_task_without_seccomp<T>(task: T) -> Result<String, String>
 where
@@ -427,7 +427,7 @@ pub fn apply_no_new_privs() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(not(target_os = "linux"), test))]
 #[allow(dead_code)]
 pub fn is_no_new_privs_set() -> Result<bool, String> {
     Ok(false)
@@ -440,7 +440,6 @@ pub fn apply_rlimits() -> Result<(), String> {
 }
 
 #[cfg(not(target_os = "linux"))]
-#[allow(dead_code)]
 #[allow(dead_code)]
 pub fn apply_user_namespace() -> Result<(), String> {
     Ok(())

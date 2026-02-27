@@ -2,6 +2,7 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use async_trait::async_trait;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
@@ -31,11 +32,13 @@ use uuid::Uuid;
 
 use safeagent_shared_identity::Claims;
 use safeagent_shared_proto::{
-    ApprovalRequest, ApprovalRequestResponse, ApprovalStatusResponse, ExecuteRequest,
+    ApprovalRequest, ApprovalRequestResponse, ApprovalStatusResponse, ExecuteRequest, TokenHeader,
 };
 
+mod jwks_cache;
 pub mod network_policy;
 mod sandbox;
+pub use jwks_cache::JwksTokenVerifier;
 
 #[derive(Clone)]
 pub struct WorkerState {
@@ -99,8 +102,9 @@ fn ensure_default_crypto_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
+#[async_trait]
 pub trait TokenVerifier {
-    fn verify(&self, token: &str, required_scope: &str) -> Result<Claims, String>;
+    async fn verify(&self, token: &str, required_scope: &str) -> Result<Claims, String>;
 }
 
 #[derive(Clone)]
@@ -127,14 +131,23 @@ impl Ed25519TokenVerifier {
     }
 }
 
+#[async_trait]
 impl TokenVerifier for Ed25519TokenVerifier {
-    fn verify(&self, token: &str, required_scope: &str) -> Result<Claims, String> {
-        let (payload, signature) = parse_token(token)?;
+    async fn verify(&self, token: &str, required_scope: &str) -> Result<Claims, String> {
+        let parsed = parse_token(token)?;
         self.public_key
-            .verify(&payload, &signature)
+            .verify(&parsed.signed_payload, &parsed.signature)
             .map_err(|_| "invalid signature".to_string())?;
-        let claims: Claims =
-            serde_json::from_slice(&payload).map_err(|_| "invalid token payload".to_string())?;
+        let claims: Claims = serde_json::from_slice(&parsed.payload)
+            .map_err(|_| "invalid token payload".to_string())?;
+        if let Some(header) = parsed.header {
+            if !header.kid.is_empty() && !claims.kid.is_empty() && header.kid != claims.kid {
+                return Err("token kid mismatch".to_string());
+            }
+        }
+        if claims.iat != 0 && claims.iat > now_unix_secs()? {
+            return Err("token issued in future".to_string());
+        }
         let now = now_unix_secs()?;
 
         if claims.exp == 0 {
@@ -235,7 +248,7 @@ async fn execute(
     }
 
     let required_scope = format!("skill:{}", req.skill_id);
-    let claims = match state.verifier.verify(&req.token, &required_scope) {
+    let claims = match state.verifier.verify(&req.token, &required_scope).await {
         Ok(claims) => claims,
         Err(err) => {
             return (
@@ -477,10 +490,46 @@ async fn await_approval(
     }
 }
 
-pub fn parse_token(token: &str) -> Result<(Vec<u8>, Signature), String> {
-    let (payload_b64, signature_b64) = token
-        .split_once('.')
-        .ok_or_else(|| "malformed token".to_string())?;
+pub struct ParsedToken {
+    pub header: Option<TokenHeader>,
+    pub payload: Vec<u8>,
+    pub signed_payload: Vec<u8>,
+    pub signature: Signature,
+}
+
+pub fn parse_token(token: &str) -> Result<ParsedToken, String> {
+    let parts = token.split('.').collect::<Vec<_>>();
+    if parts.len() == 2 {
+        let payload_b64 = parts[0];
+        let signature_b64 = parts[1];
+        let payload = URL_SAFE_NO_PAD
+            .decode(payload_b64)
+            .map_err(|_| "invalid token payload encoding".to_string())?;
+        let signature_bytes = URL_SAFE_NO_PAD
+            .decode(signature_b64)
+            .map_err(|_| "invalid token signature encoding".to_string())?;
+        let signature = Signature::from_bytes(
+            &signature_bytes
+                .try_into()
+                .map_err(|_| "token signature must be 64 bytes".to_string())?,
+        );
+        return Ok(ParsedToken {
+            header: None,
+            payload: payload.clone(),
+            signed_payload: payload,
+            signature,
+        });
+    }
+    if parts.len() != 3 {
+        return Err("malformed token".to_string());
+    }
+    let header = URL_SAFE_NO_PAD
+        .decode(parts[0])
+        .map_err(|_| "invalid token header encoding".to_string())?;
+    let header: TokenHeader =
+        serde_json::from_slice(&header).map_err(|_| "invalid token header".to_string())?;
+    let payload_b64 = parts[1];
+    let signature_b64 = parts[2];
     let payload = URL_SAFE_NO_PAD
         .decode(payload_b64)
         .map_err(|_| "invalid token payload encoding".to_string())?;
@@ -492,7 +541,12 @@ pub fn parse_token(token: &str) -> Result<(Vec<u8>, Signature), String> {
             .try_into()
             .map_err(|_| "token signature must be 64 bytes".to_string())?,
     );
-    Ok((payload, signature))
+    Ok(ParsedToken {
+        header: Some(header),
+        payload,
+        signed_payload: payload_b64.as_bytes().to_vec(),
+        signature,
+    })
 }
 
 pub fn build_server_config(
@@ -594,10 +648,18 @@ mod tests {
 
     fn issue_token(signing_key: &SigningKey, claims: &Claims) -> String {
         let payload = serde_json::to_vec(claims).expect("encode claims");
-        let signature = signing_key.sign(&payload);
+        let payload = URL_SAFE_NO_PAD.encode(payload);
+        let header = serde_json::json!({
+            "alg": "EdDSA",
+            "kid": &claims.kid,
+        });
+        let header = serde_json::to_vec(&header).expect("encode header");
+        let header = URL_SAFE_NO_PAD.encode(header);
+        let signature = signing_key.sign(payload.as_bytes());
         format!(
-            "{}.{}",
-            URL_SAFE_NO_PAD.encode(payload),
+            "{}.{}.{}",
+            header,
+            payload,
             URL_SAFE_NO_PAD.encode(signature.to_bytes())
         )
     }
@@ -616,8 +678,10 @@ mod tests {
             tenant_id: TenantId("tenant".to_string()),
             user_id: UserId("user".to_string()),
             scopes,
+            kid: "unit-key".to_string(),
             exp,
             nbf: now,
+            iat: now,
             nonce: format!("{}-{}", subject, nonce_suffix),
         }
     }
@@ -637,7 +701,7 @@ mod tests {
         let mut token = issue_token(&signing_key, &claims);
         token.push('A');
 
-        let output = state.verifier.verify(&token, "skill:echo");
+        let output = state.verifier.verify(&token, "skill:echo").await;
         assert!(output.is_err());
     }
 
@@ -648,7 +712,7 @@ mod tests {
         let claims = make_claims("unit", Some("skill:echo"), -1, "expired");
         let token = issue_token(&signing_key, &claims);
 
-        let output = state.verifier.verify(&token, "skill:echo");
+        let output = state.verifier.verify(&token, "skill:echo").await;
         assert_eq!(output.err().as_deref(), Some("token expired"));
     }
 
@@ -662,11 +726,13 @@ mod tests {
         let claims = state
             .verifier
             .verify(&token, "skill:echo")
+            .await
             .expect("first verify");
         assert!(record_and_reject_replays(&state, &claims).await.is_ok());
         let claims = state
             .verifier
             .verify(&token, "skill:echo")
+            .await
             .expect("second verify");
         assert_eq!(
             record_and_reject_replays(&state, &claims)
@@ -684,7 +750,7 @@ mod tests {
         let claims = make_claims("unit", Some("skill:read"), 60, "missing-scope");
         let token = issue_token(&signing_key, &claims);
 
-        let output = state.verifier.verify(&token, "skill:echo");
+        let output = state.verifier.verify(&token, "skill:echo").await;
         assert_eq!(output.err().as_deref(), Some("missing required scope"));
     }
 
@@ -696,6 +762,7 @@ mod tests {
         let token = issue_token(&signing_key, &claims);
         let req = ExecuteRequest {
             token,
+            tenant_id: safeagent_shared_identity::TenantId("unit".to_string()),
             skill_id: "echo".to_string(),
             input: "hello".to_string(),
             request_id: "req1".to_string(),
@@ -704,6 +771,7 @@ mod tests {
         let claims = state
             .verifier
             .verify(&req.token, &format!("skill:{}", req.skill_id))
+            .await
             .expect("token verified");
         assert!(record_and_reject_replays(&state, &claims).await.is_ok());
     }

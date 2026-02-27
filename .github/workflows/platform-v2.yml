@@ -1,14 +1,14 @@
-name: platform-v2-sandbox
+name: platform-v2
 
 on:
   push:
     branches: [main, platform-v2]
   pull_request:
-    branches: [main]
+    branches: [main, platform-v2]
 
 jobs:
-  platform-v2:
-    name: Platform v2 Verification (Linux)
+  verify-v2:
+    name: platform-v2-verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,19 +25,109 @@ jobs:
       - name: Run verify-v2
         run: |
           mkdir -p logs
-          just verify-v2 | tee logs/verify_v2_phase_2_1_linux.log
+          just verify-v2 > logs/verify_v2_linux.log 2>&1
+
+      - name: Upload verify-v2 log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-v2-verify-log
+          path: logs/verify_v2_linux.log
+          if-no-files-found: ignore
+
+      - name: Run rotation-e2e-v2
+        run: |
+          mkdir -p logs
+          just rotation-e2e-v2 > logs/rotation_e2e_v2.log 2>&1
+
+      - name: Upload rotation-e2e log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-v2-rotation-e2e-log
+          path: logs/rotation_e2e_v2.log
+          if-no-files-found: ignore
+
+  sandbox-tests:
+    name: platform-v2-sandbox-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install just
+        uses: extractions/setup-just@v2
 
       - name: Run sandbox-tests-v2
         run: |
           mkdir -p logs
-          just sandbox-tests-v2 | tee logs/sandbox_tests_v2_linux.log
+          just sandbox-tests-v2 > logs/sandbox_tests_v2_linux.log 2>&1
 
-      - name: Upload Linux platform-v2 logs
+      - name: Upload sandbox test log
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: platform-v2-linux-logs
-          path: |
-            logs/verify_v2_phase_2_1_linux.log
-            logs/sandbox_tests_v2_linux.log
+          name: platform-v2-sandbox-tests-log
+          path: logs/sandbox_tests_v2_linux.log
+          if-no-files-found: ignore
+
+  egress-tests:
+    name: platform-v2-egress-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Run egress-tests-v2
+        run: |
+          mkdir -p logs
+          just egress-tests-v2 > logs/egress_tests_v2_linux.log 2>&1
+
+      - name: Upload egress test log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-v2-egress-tests-log
+          path: logs/egress_tests_v2_linux.log
+          if-no-files-found: ignore
+
+  registry-tests:
+    name: platform-v2-registry-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Run registry-check-v2
+        run: |
+          mkdir -p logs
+          just registry-check-v2 > logs/registry_check_v2_linux.log 2>&1
+
+      - name: Upload registry test log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-v2-registry-tests-log
+          path: logs/registry_check_v2_linux.log
           if-no-files-found: ignore

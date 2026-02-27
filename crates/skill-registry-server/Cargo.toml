@@ -1,0 +1,22 @@
+[package]
+name = "safeagent-skill-registry-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.7", features = ["multipart"] }
+clap = { version = "4", features = ["derive"] }
+flate2 = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tar = "0.4"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+safeagent-skill-registry = { path = "../skill-registry" }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "multipart"] }
+ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
+hyper = "1"
+
+[dev-dependencies]
+tempfile = "3"
+hex = "0.4"

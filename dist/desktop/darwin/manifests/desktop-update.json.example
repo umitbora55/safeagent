@@ -1,0 +1,7 @@
+{
+  "version": "0.1.0",
+  "notes": [
+    "SafeAgent desktop signed release placeholder",
+    "Signature check and canary validation are implemented in update endpoint later."
+  ]
+}

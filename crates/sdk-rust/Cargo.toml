@@ -1,0 +1,23 @@
+[package]
+name = "safeagent-sdk-rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "safeagent_sdk_rust"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait = "0.1"
+reqwest = { workspace = true, default-features = false, features = ["json", "rustls-tls"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["time", "rt", "rt-multi-thread", "macros"] }
+thiserror = { workspace = true }
+url = "2"
+uuid = { workspace = true }
+safeagent-shared-proto = { path = "../../platform/shared/shared-proto" }
+safeagent-shared-identity = { path = "../../platform/shared/shared-identity" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

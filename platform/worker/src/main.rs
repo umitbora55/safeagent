@@ -16,12 +16,11 @@ use tokio::time::sleep;
 
 use safeagent_shared_proto::{WorkerRegisterRequest, WorkerRegisterResponse};
 use safeagent_worker::{
-    build_router, build_server_config, load_certs, load_key, serve, Ed25519TokenVerifier,
-    WorkerState,
+    build_router, build_server_config, load_certs, load_key, network_policy::NetworkPolicy, serve,
+    JwksTokenVerifier, WorkerState,
 };
 
 const DEFAULT_CONTROL_PLANE_URL: &str = "https://127.0.0.1:8443";
-const DEFAULT_TOKEN_PUBLIC_KEY: &str = "platform/pki/token_issuer.pub";
 
 struct WorkerConfig {
     control_plane_url: String,
@@ -30,7 +29,6 @@ struct WorkerConfig {
     mtls_key: String,
     worker_addr: String,
     worker_version: String,
-    token_public_key: String,
     oneshot: bool,
     approval_timeout_secs: u64,
 }
@@ -47,8 +45,6 @@ impl WorkerConfig {
                 .unwrap_or_else(|_| "platform/pki/worker.key".to_string()),
             worker_addr: env::var("WORKER_ADDR").unwrap_or_else(|_| "127.0.0.1:8280".to_string()),
             worker_version: env::var("WORKER_VERSION").unwrap_or_else(|_| "v1".to_string()),
-            token_public_key: env::var("TOKEN_PUBLIC_KEY")
-                .unwrap_or_else(|_| DEFAULT_TOKEN_PUBLIC_KEY.to_string()),
             oneshot: env::var("WORKER_ONESHOT").unwrap_or_default() == "1",
             approval_timeout_secs: env::var("APPROVAL_TIMEOUT_SECONDS")
                 .ok()
@@ -58,11 +54,17 @@ impl WorkerConfig {
     }
 }
 
+fn ensure_default_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 fn build_client_config(
     ca_path: &str,
     cert_path: &str,
     key_path: &str,
 ) -> Result<rustls::ClientConfig, String> {
+    ensure_default_crypto_provider();
+
     use rustls::ClientConfig;
     use rustls::RootCertStore;
 
@@ -102,6 +104,8 @@ fn build_client_config(
 
 #[tokio::main]
 async fn main() {
+    ensure_default_crypto_provider();
+
     let config = WorkerConfig::from_env();
     println!(
         "[worker] control_plane={} ca={} cert={} key={} addr={}",
@@ -112,15 +116,21 @@ async fn main() {
         config.worker_addr
     );
 
-    let verifier = Ed25519TokenVerifier::from_file(&config.token_public_key)
-        .expect("failed to load token public key");
-    let state = WorkerState::with_control_plane(
-        std::sync::Arc::new(verifier),
-        config.control_plane_url.clone(),
+    let control_plane_client =
         build_client_config(&config.mtls_ca, &config.mtls_cert, &config.mtls_key).unwrap_or_else(
             |e| panic!("Failed to build worker control plane client config: {}", e),
-        ),
+        );
+    let verifier = JwksTokenVerifier::new(
+        config.control_plane_url.clone(),
+        std::sync::Arc::new(control_plane_client.clone()),
+        60,
+    );
+    let state = WorkerState::with_control_plane_and_policy(
+        std::sync::Arc::new(verifier),
+        config.control_plane_url.clone(),
+        control_plane_client,
         config.approval_timeout_secs,
+        NetworkPolicy::from_env(),
     );
 
     let ca = load_certs(&config.mtls_ca).unwrap_or_else(|e| panic!("Failed to load CA: {}", e));

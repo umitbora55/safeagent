@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeAgent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset & Base ────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:            #09090b;
+      --surface:       #111113;
+      --surface-2:     #1c1c1f;
+      --surface-3:     #28282d;
+      --border:        #2e2e35;
+      --border-light:  #3a3a44;
+      --text:          #f4f4f5;
+      --text-2:        #a1a1aa;
+      --text-3:        #71717a;
+      --accent:        #8b5cf6;
+      --accent-dim:    #7c3aed;
+      --accent-glow:   rgba(139, 92, 246, 0.15);
+      --accent-light:  rgba(139, 92, 246, 0.08);
+      --green:         #22c55e;
+      --green-dim:     rgba(34, 197, 94, 0.12);
+      --red:           #ef4444;
+      --red-dim:       rgba(239, 68, 68, 0.12);
+      --amber:         #f59e0b;
+      --amber-dim:     rgba(245, 158, 11, 0.12);
+      --blue:          #38bdf8;
+      --radius:        12px;
+      --radius-sm:     8px;
+      --radius-lg:     16px;
+      --shadow:        0 1px 3px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+      --shadow-lg:     0 8px 32px rgba(0,0,0,.5);
+      --sidebar-w:     68px;
+      --transition:    all 0.18s ease;
+    }
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    button { cursor: pointer; border: none; background: none; font-family: inherit; font-size: inherit; color: inherit; }
+    input, textarea { font-family: inherit; font-size: inherit; color: inherit; background: none; border: none; outline: none; }
+    ::selection { background: var(--accent-dim); }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+    /* ── Layout ──────────────────────────────────────────────────────────────── */
+    #app { display: flex; height: 100vh; }
+    #sidebar {
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 0;
+      gap: 4px;
+      z-index: 10;
+    }
+    #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    #page-container { flex: 1; overflow: hidden; position: relative; }
+
+    /* ── Logo ────────────────────────────────────────────────────────────────── */
+    .logo {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      margin-bottom: 12px;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    /* ── Nav items ───────────────────────────────────────────────────────────── */
+    .nav-item {
+      width: 44px; height: 44px;
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-3);
+      transition: var(--transition);
+      cursor: pointer;
+      position: relative;
+      font-size: 18px;
+    }
+    .nav-item:hover { background: var(--surface-2); color: var(--text-2); }
+    .nav-item.active { background: var(--accent-light); color: var(--accent); }
+    .nav-item .tooltip {
+      position: absolute; left: calc(100% + 12px);
+      background: var(--surface-3); color: var(--text);
+      padding: 5px 10px; border-radius: var(--radius-sm);
+      font-size: 12px; font-weight: 500;
+      white-space: nowrap;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.15s;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      z-index: 50;
+    }
+    .nav-item:hover .tooltip { opacity: 1; }
+    .nav-bottom { margin-top: auto; }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      margin-bottom: 8px;
+    }
+    .status-dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+    /* ── Pages ───────────────────────────────────────────────────────────────── */
+    .page { position: absolute; inset: 0; display: none; flex-direction: column; }
+    .page.active { display: flex; }
+
+    /* ── Onboarding ──────────────────────────────────────────────────────────── */
+    #page-onboarding { background: var(--bg); align-items: center; justify-content: center; }
+    .onboard-card {
+      width: 480px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      box-shadow: var(--shadow-lg);
+    }
+    .onboard-logo {
+      width: 56px; height: 56px;
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+      margin: 0 auto 24px;
+      box-shadow: 0 0 30px var(--accent-glow);
+    }
+    .onboard-steps { display: flex; gap: 8px; justify-content: center; margin-bottom: 32px; }
+    .onboard-step { width: 28px; height: 4px; background: var(--border); border-radius: 2px; transition: background 0.3s; }
+    .onboard-step.done { background: var(--green); }
+    .onboard-step.active { background: var(--accent); }
+    .onboard-title { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 8px; }
+    .onboard-sub { color: var(--text-2); text-align: center; margin-bottom: 28px; font-size: 14px; line-height: 1.6; }
+    .onboard-panel { display: none; }
+    .onboard-panel.active { display: block; }
+
+    /* ── Forms ───────────────────────────────────────────────────────────────── */
+    .field { margin-bottom: 20px; }
+    .field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .field-hint { font-size: 12px; color: var(--text-3); margin-top: 6px; }
+    .input-wrap { position: relative; }
+    .input-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3); width: 16px; height: 16px; pointer-events: none; }
+    input[type=text], input[type=password], input[type=email], textarea, select {
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 11px 14px;
+      color: var(--text);
+      font-size: 14px;
+      transition: border-color 0.15s;
+    }
+    input[type=text]:focus, input[type=password]:focus, input[type=email]:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    input.has-icon { padding-left: 38px; }
+    select { cursor: pointer; }
+    select option { background: var(--surface-3); }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────────── */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 20px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; cursor: pointer; transition: var(--transition); white-space: nowrap; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-dim); box-shadow: 0 0 16px var(--accent-glow); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-ghost { background: transparent; color: var(--text-2); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+    .btn-danger { background: var(--red-dim); color: var(--red); border: 1px solid rgba(239,68,68,.25); }
+    .btn-danger:hover { background: rgba(239,68,68,.2); }
+    .btn-full { width: 100%; }
+    .btn-row { display: flex; gap: 10px; margin-top: 24px; }
+    .btn-row .btn { flex: 1; }
+
+    /* ── Router cards ────────────────────────────────────────────────────────── */
+    .router-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 4px; }
+    .router-card { border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 14px 12px; cursor: pointer; transition: var(--transition); text-align: center; }
+    .router-card:hover { border-color: var(--border-light); background: var(--surface-2); }
+    .router-card.selected { border-color: var(--accent); background: var(--accent-light); }
+    .router-card-icon { font-size: 22px; margin-bottom: 6px; }
+    .router-card-name { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+    .router-card-desc { font-size: 11px; color: var(--text-3); }
+
+    /* ── Unlock screen ───────────────────────────────────────────────────────── */
+    #page-unlock { background: var(--bg); align-items: center; justify-content: center; }
+    .unlock-card { width: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 36px; box-shadow: var(--shadow-lg); text-align: center; }
+    .unlock-logo { width: 52px; height: 52px; background: linear-gradient(135deg, var(--accent), #a855f7); border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 20px; box-shadow: 0 0 24px var(--accent-glow); }
+    .unlock-title { font-size: 19px; font-weight: 700; margin-bottom: 6px; }
+    .unlock-sub { font-size: 13px; color: var(--text-2); margin-bottom: 24px; }
+    .unlock-error { font-size: 12px; color: var(--red); margin-top: 8px; min-height: 18px; }
+
+    /* ── Chat page ───────────────────────────────────────────────────────────── */
+    #page-chat { background: var(--bg); }
+    #chat-topbar { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); }
+    #chat-topbar .title { font-size: 15px; font-weight: 600; }
+    #chat-topbar .spacer { flex: 1; }
+    .model-badge { background: var(--accent-light); color: var(--accent); border: 1px solid rgba(139,92,246,.2); padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .session-cost { font-size: 12px; color: var(--text-3); background: var(--surface-2); padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border); }
+    #chat-messages { flex: 1; overflow-y: auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; }
+    .chat-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-3); }
+    .chat-empty-icon { font-size: 40px; opacity: 0.4; }
+    .chat-empty h3 { font-size: 16px; font-weight: 600; color: var(--text-2); }
+    .chat-empty p { font-size: 13px; max-width: 300px; text-align: center; line-height: 1.6; }
+    .chat-suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+    .suggestion-chip { background: var(--surface-2); border: 1px solid var(--border); border-radius: 99px; padding: 6px 14px; font-size: 12px; color: var(--text-2); cursor: pointer; transition: var(--transition); }
+    .suggestion-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+    /* ── Messages ────────────────────────────────────────────────────────────── */
+    .msg-wrap { display: flex; gap: 10px; max-width: 780px; animation: msgIn 0.2s ease; }
+    @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .msg-wrap.user { align-self: flex-end; flex-direction: row-reverse; }
+    .msg-wrap.assistant { align-self: flex-start; }
+    .msg-avatar { width: 32px; height: 32px; min-width: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; margin-top: 2px; }
+    .msg-avatar.user-av { background: var(--accent-dim); }
+    .msg-avatar.ai-av { background: linear-gradient(135deg, var(--accent), #a855f7); box-shadow: 0 0 10px var(--accent-glow); }
+    .msg-body { display: flex; flex-direction: column; gap: 4px; max-width: calc(100% - 42px); }
+    .msg-bubble { padding: 12px 16px; border-radius: 16px; line-height: 1.65; font-size: 14px; word-break: break-word; }
+    .msg-wrap.user .msg-bubble { background: var(--accent-dim); color: white; border-bottom-right-radius: 4px; }
+    .msg-wrap.assistant .msg-bubble { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-bottom-left-radius: 4px; }
+    .msg-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-3); }
+    .msg-wrap.user .msg-meta { justify-content: flex-end; }
+    .msg-tokens { color: var(--accent); }
+    .msg-cost { color: var(--green); }
+
+    /* ── Typing indicator ────────────────────────────────────────────────────── */
+    .typing-wrap { display: none; }
+    .typing-wrap.show { display: flex; }
+    .typing-dots { background: var(--surface-2); border: 1px solid var(--border); border-radius: 16px 16px 16px 4px; padding: 12px 16px; display: flex; gap: 4px; align-items: center; }
+    .typing-dot { width: 7px; height: 7px; background: var(--text-3); border-radius: 50%; animation: typingBounce 1.2s ease-in-out infinite; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-5px); opacity: 1; } }
+
+    /* ── Chat input ──────────────────────────────────────────────────────────── */
+    #chat-input-area { padding: 16px 20px; border-top: 1px solid var(--border); background: var(--surface); }
+    .chat-input-box { display: flex; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; transition: border-color 0.15s; }
+    .chat-input-box:focus-within { border-color: var(--accent); }
+    #chat-input { flex: 1; background: none; resize: none; max-height: 140px; min-height: 22px; line-height: 1.5; overflow-y: auto; font-size: 14px; }
+    #chat-input::placeholder { color: var(--text-3); }
+    #send-btn { width: 34px; height: 34px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: var(--transition); align-self: flex-end; }
+    #send-btn:hover { background: var(--accent-dim); box-shadow: 0 0 12px var(--accent-glow); }
+    #send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    #send-btn svg { width: 16px; height: 16px; fill: white; }
+    .chat-hint { font-size: 11px; color: var(--text-3); text-align: center; margin-top: 8px; }
+
+    /* ── Approval modal ──────────────────────────────────────────────────────── */
+    #approval-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(4px); z-index: 100; display: none; align-items: center; justify-content: center; }
+    #approval-overlay.show { display: flex; }
+    .approval-card { width: 440px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; box-shadow: var(--shadow-lg); animation: slideUp 0.2s ease; }
+    @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .approval-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 16px; background: var(--red-dim); }
+    .approval-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--red); margin-bottom: 6px; }
+    .approval-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .approval-desc { font-size: 13px; color: var(--text-2); margin-bottom: 20px; line-height: 1.6; }
+    .approval-detail { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 12px; font-family: 'SF Mono', 'Fira Code', monospace; color: var(--text-2); margin-bottom: 20px; }
+
+    /* ── Dashboard ───────────────────────────────────────────────────────────── */
+    #page-dashboard { overflow-y: auto; }
+    .page-header { padding: 24px 24px 0; }
+    .page-header h1 { font-size: 20px; font-weight: 700; }
+    .page-header p { color: var(--text-2); font-size: 13px; margin-top: 4px; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 20px 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; transition: var(--transition); }
+    .stat-card:hover { border-color: var(--border-light); }
+    .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .stat-value { font-size: 26px; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+    .stat-sub { font-size: 12px; color: var(--text-3); }
+    .stat-card.green .stat-value { color: var(--green); }
+    .stat-card.blue .stat-value { color: var(--blue); }
+    .stat-card.accent .stat-value { color: var(--accent); }
+    .dash-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 0 24px 24px; }
+    .dash-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+    .dash-section h3 { font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 14px; }
+    .model-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .model-name { font-size: 13px; font-weight: 500; min-width: 100px; }
+    .model-bar-wrap { flex: 1; height: 6px; background: var(--surface-3); border-radius: 3px; overflow: hidden; }
+    .model-bar { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+    .model-bar.haiku { background: var(--green); }
+    .model-bar.sonnet { background: var(--blue); }
+    .model-bar.opus { background: var(--accent); }
+    .model-pct { font-size: 12px; color: var(--text-3); min-width: 36px; text-align: right; }
+    .security-items { display: flex; flex-direction: column; gap: 10px; }
+    .security-item { display: flex; align-items: center; gap: 10px; }
+    .security-item-name { flex: 1; font-size: 13px; }
+    .badge { padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .badge-green { background: var(--green-dim); color: var(--green); }
+
+    /* ── Audit ───────────────────────────────────────────────────────────────── */
+    #page-audit { overflow: hidden; }
+    .table-wrap { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 2; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:hover { background: var(--surface-2); }
+    tbody td { padding: 10px 12px; font-size: 12px; }
+    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .pill-green { background: var(--green-dim); color: var(--green); }
+    .pill-red { background: var(--red-dim); color: var(--red); }
+    .pill-blue { background: rgba(56,189,248,.1); color: var(--blue); }
+    .text-muted { color: var(--text-3); }
+    .text-mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; }
+    .empty-row td { text-align: center; padding: 40px; color: var(--text-3); }
+    .empty-icon { font-size: 28px; opacity: 0.4; display: block; margin-bottom: 8px; }
+
+    /* ── Settings ────────────────────────────────────────────────────────────── */
+    #page-settings { overflow-y: auto; }
+    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px 24px 24px; }
+    .settings-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .settings-section h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+    .settings-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .settings-row:last-child { margin-bottom: 0; }
+    .settings-row-info { flex: 1; }
+    .settings-row-label { font-size: 13px; font-weight: 500; }
+    .settings-row-desc { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+    .toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track { position: absolute; cursor: pointer; inset: 0; background: var(--surface-3); border-radius: 11px; border: 1px solid var(--border); transition: 0.2s; }
+    .toggle input:checked + .toggle-track { background: var(--accent); border-color: var(--accent); }
+    .toggle-thumb { position: absolute; height: 16px; width: 16px; left: 2px; bottom: 2px; background: white; border-radius: 50%; transition: 0.2s; pointer-events: none; }
+    .toggle input:checked ~ .toggle-thumb { transform: translateX(18px); }
+    .limit-input-wrap { display: flex; align-items: center; gap: 8px; }
+    .limit-input-wrap input { width: 80px; text-align: right; }
+    .limit-input-wrap span { font-size: 12px; color: var(--text-3); }
+    .settings-save-bar { padding: 14px 24px; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
+    .settings-save-status { font-size: 13px; color: var(--green); opacity: 0; transition: opacity 0.3s; }
+    .settings-save-status.show { opacity: 1; }
+    .skill-grid { display: flex; flex-direction: column; gap: 10px; }
+    .skill-row { display: flex; align-items: center; gap: 10px; }
+    .skill-icon { font-size: 16px; width: 24px; text-align: center; }
+    .skill-name { flex: 1; font-size: 13px; font-weight: 500; }
+    .skill-risk { font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 600; }
+    .skill-risk.safe { background: var(--green-dim); color: var(--green); }
+    .skill-risk.medium { background: var(--amber-dim); color: var(--amber); }
+    .skill-risk.high { background: var(--red-dim); color: var(--red); }
+
+    /* ── Toast ───────────────────────────────────────────────────────────────── */
+    #toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 200; }
+    .toast { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; font-size: 13px; display: flex; align-items: center; gap: 10px; box-shadow: var(--shadow); animation: toastIn 0.2s ease; max-width: 320px; }
+    @keyframes toastIn { from { transform: translateX(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+    .toast.success { border-left: 3px solid var(--green); }
+    .toast.error { border-left: 3px solid var(--red); }
+    .toast.info { border-left: 3px solid var(--accent); }
+
+    /* ── Spinner ─────────────────────────────────────────────────────────────── */
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.2); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Markdown ────────────────────────────────────────────────────────────── */
+    .msg-bubble code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 4px; font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; }
+    .msg-bubble pre { background: rgba(0,0,0,.3); border-radius: 8px; padding: 12px; margin: 8px 0; overflow-x: auto; border: 1px solid var(--border); }
+    .msg-bubble pre code { background: none; padding: 0; }
+    .msg-bubble p { margin-bottom: 8px; }
+    .msg-bubble p:last-child { margin-bottom: 0; }
+    .msg-bubble ul, .msg-bubble ol { padding-left: 18px; margin-bottom: 8px; }
+    .msg-bubble li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Approval overlay -->
+<div id="approval-overlay">
+  <div class="approval-card">
+    <div class="approval-icon">🚨</div>
+    <div class="approval-label">Approval Required</div>
+    <div class="approval-title" id="approval-title">Sensitive action detected</div>
+    <div class="approval-desc" id="approval-desc">This action requires your explicit approval before proceeding.</div>
+    <div class="approval-detail" id="approval-detail"></div>
+    <div class="btn-row">
+      <button class="btn btn-danger" onclick="handleApproval(false)">✕ Deny</button>
+      <button class="btn btn-primary" onclick="handleApproval(true)">✓ Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main app shell -->
+<div id="app">
+
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div class="logo">🛡️</div>
+
+    <div class="nav-item active" id="nav-chat" onclick="showPage('chat')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span class="tooltip">Chat</span>
+    </div>
+
+    <div class="nav-item" id="nav-dashboard" onclick="showPage('dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span class="tooltip">Dashboard</span>
+    </div>
+
+    <div class="nav-item" id="nav-audit" onclick="showPage('audit')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span class="tooltip">Security</span>
+    </div>
+
+    <div class="nav-item nav-bottom" id="nav-settings" onclick="showPage('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="tooltip">Settings</span>
+    </div>
+
+    <div class="status-dot" id="status-dot"></div>
+  </nav>
+
+  <!-- CONTENT -->
+  <div id="main">
+    <div id="page-container">
+
+      <!-- ── ONBOARDING ──────────────────────────────────────────────────────── -->
+      <div class="page active" id="page-onboarding">
+        <div class="onboard-card">
+          <div class="onboard-logo">🛡️</div>
+          <div class="onboard-steps">
+            <div class="onboard-step active" id="sdot-0"></div>
+            <div class="onboard-step" id="sdot-1"></div>
+            <div class="onboard-step" id="sdot-2"></div>
+            <div class="onboard-step" id="sdot-3"></div>
+            <div class="onboard-step" id="sdot-4"></div>
+          </div>
+
+          <!-- Step 0: Welcome -->
+          <div class="onboard-panel active" id="ob-0">
+            <div class="onboard-title">Welcome to SafeAgent</div>
+            <div class="onboard-sub">Your private, secure AI assistant. All credentials are encrypted locally — nothing leaves your device.</div>
+            <div style="display:grid;gap:10px;margin-bottom:28px">
+              <div style="display:flex;gap:12px;align-items:flex-start;padding:12px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">
+                <span style="font-size:18px">🔒</span>
+                <div><div style="font-size:13px;font-weight:600;margin-bottom:2px">Zero-knowledge vault</div><div style="font-size:12px;color:var(--text-2)">API keys encrypted with AES-256-GCM + Argon2id</div></div>
+              </div>
+              <div style="display:flex;gap:12px;align-items:flex-start;padding:12px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">
+                <span style="font-size:18px">🛡️</span>
+                <div><div style="font-size:13px;font-weight:600;margin-bottom:2px">62-crate security stack</div><div style="font-size:12px;color:var(--text-2)">Prompt guard, CBRA 243 controls, audit log, policy engine</div></div>
+              </div>
+              <div style="display:flex;gap:12px;align-items:flex-start;padding:12px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">
+                <span style="font-size:18px">💰</span>
+                <div><div style="font-size:13px;font-weight:600;margin-bottom:2px">Smart cost routing</div><div style="font-size:12px;color:var(--text-2)">Automatically picks Haiku/Sonnet/Opus to minimise spend</div></div>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-full" onclick="obNext()">Get started →</button>
+          </div>
+
+          <!-- Step 1: Vault password -->
+          <div class="onboard-panel" id="ob-1">
+            <div class="onboard-title">Create a vault password</div>
+            <div class="onboard-sub">This password protects your encrypted vault. It is stored only on your device — we never see it.</div>
+            <div class="field">
+              <label>Password</label>
+              <input type="password" id="ob-pw1" placeholder="At least 8 characters" autocomplete="new-password" />
+            </div>
+            <div class="field">
+              <label>Confirm password</label>
+              <input type="password" id="ob-pw2" placeholder="Repeat your password" autocomplete="new-password" />
+            </div>
+            <div style="font-size:12px;color:var(--red);min-height:18px;margin-bottom:4px" id="ob-pw-err"></div>
+            <div class="btn-row">
+              <button class="btn btn-ghost" onclick="obPrev()">← Back</button>
+              <button class="btn btn-primary" id="ob-vault-btn" onclick="obSaveVault()">Continue →</button>
+            </div>
+          </div>
+
+          <!-- Step 2: API key -->
+          <div class="onboard-panel" id="ob-2">
+            <div class="onboard-title">Add your Anthropic API key</div>
+            <div class="onboard-sub">Your key is stored encrypted in the local vault. It is only ever sent directly to <strong>api.anthropic.com</strong>.</div>
+            <div class="field">
+              <label>Anthropic API Key</label>
+              <div class="input-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <input type="password" id="ob-apikey" class="has-icon" placeholder="sk-ant-api03-..." autocomplete="off" />
+              </div>
+              <div class="field-hint">Get your key at <span style="color:var(--accent);cursor:pointer" onclick="openExternal('https://console.anthropic.com')">console.anthropic.com</span></div>
+            </div>
+            <div style="font-size:12px;color:var(--red);min-height:18px;margin-bottom:4px" id="ob-key-err"></div>
+            <div class="btn-row">
+              <button class="btn btn-ghost" onclick="obPrev()">← Back</button>
+              <button class="btn btn-primary" id="ob-key-btn" onclick="obSaveKey()">Continue →</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Router -->
+          <div class="onboard-panel" id="ob-3">
+            <div class="onboard-title">Choose your AI model</div>
+            <div class="onboard-sub">SafeAgent automatically picks the right model. How should it balance cost vs. capability?</div>
+            <div class="router-cards">
+              <div class="router-card" id="rc-economy" onclick="selectRouter('economy')">
+                <div class="router-card-icon">⚡</div>
+                <div class="router-card-name">Economy</div>
+                <div class="router-card-desc">Always Haiku<br>Fastest & cheapest</div>
+              </div>
+              <div class="router-card selected" id="rc-balanced" onclick="selectRouter('balanced')">
+                <div class="router-card-icon">⚖️</div>
+                <div class="router-card-name">Balanced</div>
+                <div class="router-card-desc">Smart routing<br>Best value</div>
+              </div>
+              <div class="router-card" id="rc-performance" onclick="selectRouter('performance')">
+                <div class="router-card-icon">🚀</div>
+                <div class="router-card-name">Performance</div>
+                <div class="router-card-desc">Always Opus<br>Max capability</div>
+              </div>
+            </div>
+            <div class="btn-row" style="margin-top:20px">
+              <button class="btn btn-ghost" onclick="obPrev()">← Back</button>
+              <button class="btn btn-primary" onclick="obNext()">Continue →</button>
+            </div>
+          </div>
+
+          <!-- Step 4: Done -->
+          <div class="onboard-panel" id="ob-4">
+            <div class="onboard-title" style="font-size:26px">🎉 You're all set!</div>
+            <div class="onboard-sub">SafeAgent is ready. Your vault is encrypted and the security stack is active.</div>
+            <div style="display:grid;gap:8px;margin-bottom:28px;text-align:left">
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--green-dim);border-radius:var(--radius-sm);border:1px solid rgba(34,197,94,.2)"><span style="color:var(--green)">✓</span><span style="font-size:13px">Vault encrypted and unlocked</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--green-dim);border-radius:var(--radius-sm);border:1px solid rgba(34,197,94,.2)"><span style="color:var(--green)">✓</span><span style="font-size:13px">API key saved securely</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--green-dim);border-radius:var(--radius-sm);border:1px solid rgba(34,197,94,.2)"><span style="color:var(--green)">✓</span><span id="ob-router-confirm" style="font-size:13px">Balanced routing active</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--green-dim);border-radius:var(--radius-sm);border:1px solid rgba(34,197,94,.2)"><span style="color:var(--green)">✓</span><span style="font-size:13px">62-crate security stack active</span></div>
+            </div>
+            <button class="btn btn-primary btn-full" onclick="finishOnboarding()">Start chatting →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── UNLOCK ──────────────────────────────────────────────────────────── -->
+      <div class="page" id="page-unlock">
+        <div class="unlock-card">
+          <div class="unlock-logo">🛡️</div>
+          <div class="unlock-title">Welcome back</div>
+          <div class="unlock-sub">Enter your vault password to continue</div>
+          <div class="field" style="text-align:left">
+            <label>Vault Password</label>
+            <input type="password" id="unlock-pw" placeholder="Your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doUnlock()" />
+          </div>
+          <div class="unlock-error" id="unlock-error"></div>
+          <button class="btn btn-primary btn-full" id="unlock-btn" style="margin-top:20px" onclick="doUnlock()">Unlock</button>
+        </div>
+      </div>
+
+      <!-- ── CHAT ───────────────────────────────────────────────────────────── -->
+      <div class="page" id="page-chat">
+        <div id="chat-topbar">
+          <div style="font-size:20px">🛡️</div>
+          <div class="title">SafeAgent</div>
+          <div class="spacer"></div>
+          <span class="model-badge" id="model-badge">haiku</span>
+          <span class="session-cost" id="session-cost-display">$0.0000</span>
+          <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="clearChat()">Clear</button>
+        </div>
+
+        <div id="chat-messages">
+          <div class="chat-empty" id="chat-empty-state">
+            <div class="chat-empty-icon">💬</div>
+            <h3>How can I help you?</h3>
+            <p>Ask me anything. All messages are protected by SafeAgent's security stack.</p>
+            <div class="chat-suggestions">
+              <span class="suggestion-chip" onclick="useSuggestion('Explain how prompt injection attacks work')">🛡️ Prompt injection</span>
+              <span class="suggestion-chip" onclick="useSuggestion('Write a Python script to parse a CSV file')">💻 Write some code</span>
+              <span class="suggestion-chip" onclick="useSuggestion('What can SafeAgent help me with?')">❓ What can you do?</span>
+              <span class="suggestion-chip" onclick="useSuggestion('Explain AES-256-GCM encryption')">🔒 Explain encryption</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="msg-wrap assistant typing-wrap" id="typing-indicator" style="padding: 0 20px 8px">
+          <div class="msg-avatar ai-av">🛡️</div>
+          <div class="typing-dots">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+          </div>
+        </div>
+
+        <div id="chat-input-area">
+          <div class="chat-input-box">
+            <textarea id="chat-input" rows="1" placeholder="Message SafeAgent…" onkeydown="handleChatKey(event)" oninput="autoResize(this)"></textarea>
+            <button id="send-btn" onclick="sendMessage()">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+          </div>
+          <div class="chat-hint">Enter to send · Shift+Enter for new line · Powered by Anthropic Claude</div>
+        </div>
+      </div>
+
+      <!-- ── DASHBOARD ──────────────────────────────────────────────────────── -->
+      <div class="page" id="page-dashboard">
+        <div class="page-header"><h1>Dashboard</h1><p>Usage overview and system health</p></div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-label">📨 Total Requests</div><div class="stat-value" id="stat-requests">—</div><div class="stat-sub">All time</div></div>
+          <div class="stat-card green"><div class="stat-label">💰 Total Cost</div><div class="stat-value" id="stat-cost">—</div><div class="stat-sub">All time (USD)</div></div>
+          <div class="stat-card blue"><div class="stat-label">🔤 Tokens Used</div><div class="stat-value" id="stat-tokens">—</div><div class="stat-sub">Input + output</div></div>
+          <div class="stat-card accent"><div class="stat-label">⚡ Cache Saved</div><div class="stat-value" id="stat-cache">—</div><div class="stat-sub">Cached tokens</div></div>
+        </div>
+        <div class="dash-row">
+          <div class="dash-section">
+            <h3>Model usage</h3>
+            <div class="model-row"><div class="model-name">Haiku</div><div class="model-bar-wrap"><div class="model-bar haiku" id="bar-haiku" style="width:0%"></div></div><div class="model-pct" id="pct-haiku">0%</div></div>
+            <div class="model-row"><div class="model-name">Sonnet</div><div class="model-bar-wrap"><div class="model-bar sonnet" id="bar-sonnet" style="width:0%"></div></div><div class="model-pct" id="pct-sonnet">0%</div></div>
+            <div class="model-row"><div class="model-name">Opus</div><div class="model-bar-wrap"><div class="model-bar opus" id="bar-opus" style="width:0%"></div></div><div class="model-pct" id="pct-opus">0%</div></div>
+          </div>
+          <div class="dash-section">
+            <h3>Security stack</h3>
+            <div class="security-items">
+              <div class="security-item"><span style="font-size:16px">🔒</span><span class="security-item-name">Credential Vault</span><span class="badge badge-green">Active</span></div>
+              <div class="security-item"><span style="font-size:16px">🛡️</span><span class="security-item-name">Prompt Guard</span><span class="badge badge-green">Active</span></div>
+              <div class="security-item"><span style="font-size:16px">📋</span><span class="security-item-name">Policy Engine</span><span class="badge badge-green">Active</span></div>
+              <div class="security-item"><span style="font-size:16px">📊</span><span class="security-item-name">Audit Log</span><span class="badge badge-green">Active</span></div>
+              <div class="security-item"><span style="font-size:16px">🔑</span><span class="security-item-name">CBRA 243 Controls</span><span class="badge badge-green">243 active</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── AUDIT ──────────────────────────────────────────────────────────── -->
+      <div class="page" id="page-audit">
+        <div class="page-header" style="padding-bottom:16px"><h1>Security &amp; Audit</h1><p>Immutable event log — all LLM requests, policy decisions, and security events</p></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Event</th><th>Model</th><th>Tokens</th><th>Cost</th><th>Status</th></tr></thead>
+            <tbody id="audit-tbody"><tr class="empty-row"><td colspan="6"><span class="empty-icon">📋</span>No events yet — start chatting!</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── SETTINGS ───────────────────────────────────────────────────────── -->
+      <div class="page" id="page-settings">
+        <div class="page-header"><h1>Settings</h1><p>Configure SafeAgent to your preferences</p></div>
+        <div class="settings-grid">
+
+          <div class="settings-section">
+            <h3><span>🔑</span> API Keys</h3>
+            <div class="field">
+              <label>Anthropic API Key</label>
+              <div class="input-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <input type="password" id="s-apikey" class="has-icon" placeholder="sk-ant-api03-…" autocomplete="off" />
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="saveApiKey()">Update key</button>
+          </div>
+
+          <div class="settings-section">
+            <h3><span>🧭</span> Model Routing</h3>
+            <div class="field">
+              <label>Routing mode</label>
+              <select id="s-router">
+                <option value="economy">⚡ Economy — Always Haiku</option>
+                <option value="balanced" selected>⚖️ Balanced — Smart routing</option>
+                <option value="performance">🚀 Performance — Always Opus</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3><span>💰</span> Spending Limits</h3>
+            <div class="settings-row">
+              <div class="settings-row-info"><div class="settings-row-label">Daily limit</div><div class="settings-row-desc">Hard cap per day</div></div>
+              <div class="limit-input-wrap"><input type="text" id="s-daily" value="5.00" /><span>USD</span></div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-info"><div class="settings-row-label">Monthly limit</div><div class="settings-row-desc">Hard cap per month</div></div>
+              <div class="limit-input-wrap"><input type="text" id="s-monthly" value="50.00" /><span>USD</span></div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3><span>⚡</span> Skill Permissions</h3>
+            <div class="skill-grid">
+              <div class="skill-row"><span class="skill-icon">🔍</span><span class="skill-name">Web search</span><span class="skill-risk safe">Safe</span><label class="toggle"><input type="checkbox" id="sk-web" checked /><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div>
+              <div class="skill-row"><span class="skill-icon">📂</span><span class="skill-name">File reader</span><span class="skill-risk safe">Safe</span><label class="toggle"><input type="checkbox" id="sk-file-r" checked /><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div>
+              <div class="skill-row"><span class="skill-icon">✏️</span><span class="skill-name">File writer</span><span class="skill-risk medium">Medium</span><label class="toggle"><input type="checkbox" id="sk-file-w" /><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div>
+              <div class="skill-row"><span class="skill-icon">💻</span><span class="skill-name">Shell executor</span><span class="skill-risk high">High risk</span><label class="toggle"><input type="checkbox" id="sk-shell" /><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div>
+              <div class="skill-row"><span class="skill-icon">📧</span><span class="skill-name">Email sender</span><span class="skill-risk high">High risk</span><label class="toggle"><input type="checkbox" id="sk-email" /><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div>
+              <div class="skill-row"><span class="skill-icon">📅</span><span class="skill-name">Calendar writer</span><span class="skill-risk medium">Medium</span><label class="toggle"><input type="checkbox" id="sk-cal" /><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3><span>⚙️</span> System</h3>
+            <div class="settings-row">
+              <div class="settings-row-info"><div class="settings-row-label">Launch at login</div><div class="settings-row-desc">Start SafeAgent automatically</div></div>
+              <label class="toggle"><input type="checkbox" id="s-autostart" onchange="toggleAutostart(this.checked)" /><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+            </div>
+            <div class="settings-row" style="margin-top:8px">
+              <div class="settings-row-info"><div class="settings-row-label">Version</div><div class="settings-row-desc" id="s-version">0.1.0</div></div>
+            </div>
+            <button class="btn btn-danger btn-full" style="margin-top:12px" onclick="if(confirm('Clear all local data? This cannot be undone.'))clearAllData()">🗑️ Clear all data</button>
+          </div>
+
+          <div class="settings-section">
+            <h3><span>ℹ️</span> About</h3>
+            <div style="color:var(--text-2);font-size:13px;line-height:1.8">
+              <p><strong style="color:var(--text)">SafeAgent</strong> is an open-source enterprise-grade AI safety platform.</p><br>
+              <p>🦀 62 Rust security crates</p>
+              <p>✅ 1,096 tests passing</p>
+              <p>🛡️ CBRA 243 controls / 18 domains</p>
+              <p>📋 EU AI Act 2026 compliant</p>
+              <p>🔒 AES-256-GCM + Argon2id vault</p>
+            </div>
+          </div>
+
+        </div>
+        <div class="settings-save-bar">
+          <span class="settings-save-status" id="save-status">✓ Settings saved</span>
+          <button class="btn btn-ghost" onclick="loadSettings()">Reset</button>
+          <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Tauri IPC ─────────────────────────────────────────────────────────────────
+const isTauri = typeof window.__TAURI__ !== 'undefined';
+
+async function invoke(cmd, args = {}) {
+  if (isTauri) return window.__TAURI__.core.invoke(cmd, args);
+  return mockInvoke(cmd, args);
+}
+
+function openExternal(url) {
+  if (isTauri) window.__TAURI__.shell.open(url);
+  else window.open(url, '_blank');
+}
+
+// ── Mock data (browser preview / dev) ────────────────────────────────────────
+function mockInvoke(cmd, args) {
+  const mocks = {
+    is_first_run: false, is_vault_unlocked: true, unlock_vault: true,
+    has_api_key: true, validate_api_key: args.key && args.key.startsWith('sk-ant-'),
+    save_api_key: null, get_version: '0.1.0',
+    get_config: { router_mode:'balanced', daily_limit_usd:5, monthly_limit_usd:50, telegram_enabled:false, autostart:false,
+      skills:{web_search:true,file_reader:true,file_writer:false,shell_executor:false,email_sender:false,calendar_writer:false} },
+    get_stats: { total_requests:42, total_cost_usd:0.0234, total_input_tokens:15432, total_output_tokens:9871, cache_tokens:2100, session_cost_usd:0.0012,
+      model_breakdown:[{model:'claude-haiku',requests:30,cost_usd:0.005},{model:'claude-sonnet',requests:10,cost_usd:0.015},{model:'claude-opus',requests:2,cost_usd:0.003}] },
+    get_audit_entries: [
+      {id:'1',timestamp:new Date().toISOString(),event_type:'llm_request',model:'claude-haiku-4-5',platform:'desktop',input_tokens:245,output_tokens:183,cost_usd:0.00008,latency_ms:342,success:true,error:null},
+      {id:'2',timestamp:new Date(Date.now()-60000).toISOString(),event_type:'llm_request',model:'claude-sonnet-4-5',platform:'desktop',input_tokens:512,output_tokens:420,cost_usd:0.0085,latency_ms:1240,success:true,error:null},
+    ],
+    send_message: {id:Math.random().toString(36).slice(2),role:'assistant',content:"Hello! I'm SafeAgent. Your messages are protected by prompt injection detection, policy enforcement, and an immutable audit log. How can I help you today?",timestamp:new Date().toISOString(),model:'claude-haiku-4-5',input_tokens:120,output_tokens:42,cost_usd:0.000014},
+    get_history: [], clear_history: null, save_config: null,
+    get_system_status: {vault_unlocked:true,api_key_configured:true,message_count:0,version:'0.1.0'},
+  };
+  return mocks[cmd] !== undefined ? mocks[cmd] : null;
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let obStep = 0, selectedRouter = 'balanced', isTyping = false, sessionCostUsd = 0;
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+async function init() {
+  try { const v = await invoke('get_version'); document.getElementById('s-version').textContent = 'v' + v; } catch(e) {}
+  try {
+    const firstRun = await invoke('is_first_run');
+    if (firstRun) { showPage('onboarding'); hideSidebar(); return; }
+    const unlocked = await invoke('is_vault_unlocked');
+    if (!unlocked) { showPage('unlock'); hideSidebar(); return; }
+    showPage('chat'); showSidebar();
+    await loadHistory();
+  } catch(e) { showPage('chat'); showSidebar(); }
+  if (isTauri) {
+    window.__TAURI__.event.listen('cost_update', e => {
+      sessionCostUsd += e.payload.cost_usd;
+      document.getElementById('session-cost-display').textContent = '$' + sessionCostUsd.toFixed(4);
+      const m = e.payload.model;
+      document.getElementById('model-badge').textContent = m.includes('haiku') ? 'haiku' : m.includes('sonnet') ? 'sonnet' : 'opus';
+    });
+  }
+}
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const pg = document.getElementById('page-' + name);
+  if (pg) pg.classList.add('active');
+  const nav = document.getElementById('nav-' + name);
+  if (nav) nav.classList.add('active');
+  if (name === 'dashboard') loadStats();
+  if (name === 'audit') loadAudit();
+  if (name === 'settings') loadSettings();
+}
+function hideSidebar() { document.getElementById('sidebar').style.display = 'none'; }
+function showSidebar() { document.getElementById('sidebar').style.display = ''; }
+
+// ── Onboarding ────────────────────────────────────────────────────────────────
+function obNext() { setObStep(obStep + 1); }
+function obPrev() { setObStep(obStep - 1); }
+function setObStep(n) {
+  document.querySelectorAll('.onboard-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('ob-' + n).classList.add('active');
+  for (let i = 0; i < 5; i++) {
+    const d = document.getElementById('sdot-' + i);
+    d.className = 'onboard-step' + (i < n ? ' done' : i === n ? ' active' : '');
+  }
+  obStep = n;
+}
+async function obSaveVault() {
+  const pw1 = document.getElementById('ob-pw1').value;
+  const pw2 = document.getElementById('ob-pw2').value;
+  const err = document.getElementById('ob-pw-err');
+  if (pw1.length < 8) { err.textContent = 'Password must be at least 8 characters'; return; }
+  if (pw1 !== pw2) { err.textContent = 'Passwords do not match'; return; }
+  err.textContent = '';
+  const btn = document.getElementById('ob-vault-btn');
+  btn.innerHTML = '<span class="spinner"></span> Saving…'; btn.disabled = true;
+  try { await invoke('unlock_vault', { password: pw1 }); obNext(); }
+  catch(e) { err.textContent = String(e); }
+  btn.innerHTML = 'Continue →'; btn.disabled = false;
+}
+async function obSaveKey() {
+  const key = document.getElementById('ob-apikey').value.trim();
+  const err = document.getElementById('ob-key-err');
+  const valid = await invoke('validate_api_key', { key });
+  if (!valid) { err.textContent = 'Invalid API key. Should start with sk-ant-'; return; }
+  err.textContent = '';
+  const btn = document.getElementById('ob-key-btn');
+  btn.innerHTML = '<span class="spinner"></span> Saving…'; btn.disabled = true;
+  try { await invoke('save_api_key', { key }); obNext(); }
+  catch(e) { err.textContent = String(e); }
+  btn.innerHTML = 'Continue →'; btn.disabled = false;
+}
+function selectRouter(mode) {
+  selectedRouter = mode;
+  ['economy','balanced','performance'].forEach(m =>
+    document.getElementById('rc-' + m).classList.toggle('selected', m === mode)
+  );
+}
+async function finishOnboarding() {
+  try {
+    await invoke('save_config', { config: {
+      router_mode: selectedRouter, daily_limit_usd: 5, monthly_limit_usd: 50,
+      telegram_enabled: false, autostart: false,
+      skills: { web_search:true, file_reader:true, file_writer:false, shell_executor:false, email_sender:false, calendar_writer:false }
+    }});
+  } catch(e) {}
+  document.getElementById('ob-router-confirm').textContent =
+    selectedRouter.charAt(0).toUpperCase() + selectedRouter.slice(1) + ' routing active';
+  showSidebar();
+  showPage('chat');
+  toast('🎉 Welcome to SafeAgent!', 'success');
+}
+
+// ── Unlock ────────────────────────────────────────────────────────────────────
+async function doUnlock() {
+  const pw = document.getElementById('unlock-pw').value;
+  const err = document.getElementById('unlock-error');
+  const btn = document.getElementById('unlock-btn');
+  if (!pw) { err.textContent = 'Please enter your password'; return; }
+  btn.innerHTML = '<span class="spinner"></span> Unlocking…'; btn.disabled = true;
+  try {
+    const ok = await invoke('unlock_vault', { password: pw });
+    if (ok) { showSidebar(); showPage('chat'); await loadHistory(); toast('🔓 Vault unlocked', 'success'); }
+    else { err.textContent = 'Incorrect password. Please try again.'; document.getElementById('unlock-pw').value = ''; }
+  } catch(e) { err.textContent = String(e); }
+  btn.innerHTML = 'Unlock'; btn.disabled = false;
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const msgs = await invoke('get_history', { limit: 100 });
+    if (msgs && msgs.length > 0) {
+      const el = document.getElementById('chat-empty-state');
+      if (el) el.remove();
+      msgs.forEach(appendMessage);
+      scrollChat();
+    }
+  } catch(e) {}
+}
+function handleChatKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 140) + 'px'; }
+function useSuggestion(text) { const i = document.getElementById('chat-input'); i.value = text; i.focus(); autoResize(i); }
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text || isTyping) return;
+  input.value = ''; input.style.height = 'auto';
+  const empty = document.getElementById('chat-empty-state');
+  if (empty) empty.remove();
+  appendMessage({ role:'user', content:text, timestamp:new Date().toISOString() });
+  scrollChat();
+  isTyping = true;
+  document.getElementById('send-btn').disabled = true;
+  document.getElementById('typing-indicator').classList.add('show');
+  scrollChat();
+  try {
+    const resp = await invoke('send_message', { text });
+    document.getElementById('typing-indicator').classList.remove('show');
+    appendMessage(resp);
+    if (resp.cost_usd) { sessionCostUsd += resp.cost_usd; document.getElementById('session-cost-display').textContent = '$' + sessionCostUsd.toFixed(4); }
+    if (resp.model) {
+      const m = resp.model;
+      document.getElementById('model-badge').textContent = m.includes('haiku') ? 'haiku' : m.includes('sonnet') ? 'sonnet' : 'opus';
+    }
+    scrollChat();
+  } catch(e) {
+    document.getElementById('typing-indicator').classList.remove('show');
+    appendMessage({ role:'assistant', content:'⚠️ Error: ' + String(e), timestamp:new Date().toISOString() });
+    toast(String(e), 'error');
+    scrollChat();
+  }
+  isTyping = false;
+  document.getElementById('send-btn').disabled = false;
+  input.focus();
+}
+
+function appendMessage(msg) {
+  const c = document.getElementById('chat-messages');
+  const isUser = msg.role === 'user';
+  const wrap = Object.assign(document.createElement('div'), { className: 'msg-wrap ' + (isUser ? 'user' : 'assistant') });
+  const av = Object.assign(document.createElement('div'), { className: 'msg-avatar ' + (isUser ? 'user-av' : 'ai-av'), textContent: isUser ? '👤' : '🛡️' });
+  const body = Object.assign(document.createElement('div'), { className: 'msg-body' });
+  const bubble = Object.assign(document.createElement('div'), { className: 'msg-bubble', innerHTML: renderMd(msg.content) });
+  const meta = Object.assign(document.createElement('div'), { className: 'msg-meta' });
+  let metaHtml = '<span>' + formatTime(msg.timestamp) + '</span>';
+  if (msg.model) metaHtml += '<span class="msg-tokens">· ' + shortModel(msg.model) + '</span>';
+  if (msg.input_tokens) metaHtml += '<span class="msg-tokens">· ' + ((msg.input_tokens + msg.output_tokens)||0).toLocaleString() + ' tok</span>';
+  if (msg.cost_usd) metaHtml += '<span class="msg-cost">· $' + msg.cost_usd.toFixed(5) + '</span>';
+  meta.innerHTML = metaHtml;
+  body.appendChild(bubble); body.appendChild(meta);
+  wrap.appendChild(av); wrap.appendChild(body);
+  c.appendChild(wrap);
+}
+
+function scrollChat() { const c = document.getElementById('chat-messages'); setTimeout(() => c.scrollTop = c.scrollHeight, 50); }
+
+async function clearChat() {
+  if (!confirm('Clear this conversation?')) return;
+  await invoke('clear_history');
+  const c = document.getElementById('chat-messages');
+  c.innerHTML = '';
+  const empty = document.createElement('div');
+  empty.className = 'chat-empty'; empty.id = 'chat-empty-state';
+  empty.innerHTML = '<div class="chat-empty-icon">💬</div><h3>How can I help you?</h3><p>Ask me anything. All messages are protected by SafeAgent\'s security stack.</p>';
+  c.appendChild(empty);
+  sessionCostUsd = 0;
+  document.getElementById('session-cost-display').textContent = '$0.0000';
+  toast('Conversation cleared', 'info');
+}
+
+function handleApproval(approved) {
+  document.getElementById('approval-overlay').classList.remove('show');
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const s = await invoke('get_stats');
+    document.getElementById('stat-requests').textContent = s.total_requests.toLocaleString();
+    document.getElementById('stat-cost').textContent = '$' + s.total_cost_usd.toFixed(4);
+    document.getElementById('stat-tokens').textContent = fmtK(s.total_input_tokens + s.total_output_tokens);
+    document.getElementById('stat-cache').textContent = fmtK(s.cache_tokens);
+    if (s.model_breakdown && s.model_breakdown.length) {
+      const tot = s.model_breakdown.reduce((a,m) => a + m.requests, 0) || 1;
+      const find = (k) => (s.model_breakdown.find(m => m.model.includes(k)) || {requests:0}).requests;
+      const h = Math.round(find('haiku') / tot * 100), sn = Math.round(find('sonnet') / tot * 100), o = Math.round(find('opus') / tot * 100);
+      ['haiku','sonnet','opus'].forEach((m,i) => {
+        const p = [h,sn,o][i];
+        document.getElementById('bar-' + m).style.width = p + '%';
+        document.getElementById('pct-' + m).textContent = p + '%';
+      });
+    }
+  } catch(e) {}
+}
+
+// ── Audit ─────────────────────────────────────────────────────────────────────
+async function loadAudit() {
+  try {
+    const entries = await invoke('get_audit_entries', { limit: 50 });
+    const tbody = document.getElementById('audit-tbody');
+    if (!entries || !entries.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="6"><span class="empty-icon">📋</span>No events yet — start chatting!</td></tr>'; return; }
+    tbody.innerHTML = entries.map(e => `<tr>
+      <td class="text-mono text-muted">${formatTime(e.timestamp)}</td>
+      <td><span class="pill pill-blue">${e.event_type}</span></td>
+      <td class="text-muted">${shortModel(e.model)}</td>
+      <td class="text-muted">${((e.input_tokens||0)+(e.output_tokens||0)).toLocaleString()}</td>
+      <td class="text-muted">$${(e.cost_usd||0).toFixed(5)}</td>
+      <td><span class="pill ${e.success ? 'pill-green' : 'pill-red'}">${e.success ? '✓ ok' : '✕ fail'}</span></td>
+    </tr>`).join('');
+  } catch(e) {}
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+async function loadSettings() {
+  try {
+    const c = await invoke('get_config');
+    document.getElementById('s-router').value = c.router_mode;
+    document.getElementById('s-daily').value = c.daily_limit_usd.toFixed(2);
+    document.getElementById('s-monthly').value = c.monthly_limit_usd.toFixed(2);
+    document.getElementById('s-autostart').checked = !!c.autostart;
+    if (c.skills) {
+      ['web','file-r','file-w','shell','email','cal'].forEach((id, i) => {
+        const keys = ['web_search','file_reader','file_writer','shell_executor','email_sender','calendar_writer'];
+        const el = document.getElementById('sk-' + id);
+        if (el) el.checked = !!c.skills[keys[i]];
+      });
+    }
+  } catch(e) {}
+}
+async function saveSettings() {
+  const cfg = {
+    router_mode: document.getElementById('s-router').value,
+    daily_limit_usd: parseFloat(document.getElementById('s-daily').value) || 5,
+    monthly_limit_usd: parseFloat(document.getElementById('s-monthly').value) || 50,
+    telegram_enabled: false,
+    autostart: document.getElementById('s-autostart').checked,
+    skills: {
+      web_search: document.getElementById('sk-web').checked,
+      file_reader: document.getElementById('sk-file-r').checked,
+      file_writer: document.getElementById('sk-file-w').checked,
+      shell_executor: document.getElementById('sk-shell').checked,
+      email_sender: document.getElementById('sk-email').checked,
+      calendar_writer: document.getElementById('sk-cal').checked,
+    }
+  };
+  try {
+    await invoke('save_config', { config: cfg });
+    const st = document.getElementById('save-status');
+    st.classList.add('show');
+    setTimeout(() => st.classList.remove('show'), 3000);
+    toast('Settings saved', 'success');
+  } catch(e) { toast('Failed to save: ' + String(e), 'error'); }
+}
+async function saveApiKey() {
+  const key = document.getElementById('s-apikey').value.trim();
+  if (!key) { toast('Please enter an API key', 'error'); return; }
+  const valid = await invoke('validate_api_key', { key });
+  if (!valid) { toast('Invalid API key format', 'error'); return; }
+  try { await invoke('save_api_key', { key }); document.getElementById('s-apikey').value = ''; toast('API key updated', 'success'); }
+  catch(e) { toast(String(e), 'error'); }
+}
+async function toggleAutostart(enabled) {
+  if (!isTauri) return;
+  try { await window.__TAURI__.core.invoke(enabled ? 'plugin:autostart|enable' : 'plugin:autostart|disable'); } catch(e) {}
+}
+async function clearAllData() { toast('Data cleared (restart to apply)', 'info'); }
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function formatTime(iso) {
+  try {
+    const d = new Date(iso), now = new Date(), diff = (now - d) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    return d.toLocaleDateString([], {month:'short',day:'numeric'});
+  } catch(e) { return iso; }
+}
+function fmtK(n) { if (n >= 1e6) return (n/1e6).toFixed(1)+'M'; if (n >= 1e3) return (n/1e3).toFixed(1)+'K'; return String(n||0); }
+function shortModel(m) { if (!m) return '—'; if (m.includes('haiku')) return 'Haiku'; if (m.includes('sonnet')) return 'Sonnet'; if (m.includes('opus')) return 'Opus'; return m; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function renderMd(text) {
+  return text
+    .replace(/```[\w]*\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .split('\n\n').map(p => p.trim() ? '<p>' + p.replace(/\n/g,'<br>') + '</p>' : '').join('')
+    || esc(text);
+}
+function toast(msg, type = 'info', ms = 3500) {
+  const icons = {success:'✓', error:'✕', info:'ℹ'};
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.innerHTML = '<span>' + icons[type] + '</span><span>' + esc(msg) + '</span>';
+  c.appendChild(t);
+  setTimeout(() => { t.style.animation = 'toastIn 0.2s ease reverse'; setTimeout(() => t.remove(), 200); }, ms);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

@@ -1,277 +1,652 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SafeAgent</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SafeAgent Desktop</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root {
-            --bg: #0f172a; --bg2: #1e293b; --bg3: #334155;
-            --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
-            --accent: #38bdf8; --accent2: #0ea5e9;
-            --green: #22c55e; --red: #ef4444; --orange: #f59e0b;
-            --border: #475569;
-        }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; }
-
-        /* Sidebar */
-        .sidebar { width: 260px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
-        .sidebar-header { padding: 1.25rem; border-bottom: 1px solid var(--border); }
-        .sidebar-header h1 { font-size: 1.1rem; color: var(--accent); display: flex; align-items: center; gap: 0.5rem; }
-        .sidebar-header .version { font-size: 0.65rem; background: var(--bg3); padding: 2px 8px; border-radius: 99px; color: var(--text2); }
-        .nav { flex: 1; padding: 0.75rem; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 8px; cursor: pointer; color: var(--text2); font-size: 0.875rem; transition: all 0.15s; margin-bottom: 2px; }
-        .nav-item:hover { background: var(--bg3); color: var(--text); }
-        .nav-item.active { background: var(--accent); color: #0f172a; font-weight: 600; }
-        .nav-item .icon { width: 20px; text-align: center; }
-        .sidebar-footer { padding: 1rem; border-top: 1px solid var(--border); }
-        .status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text2); }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-
-        /* Main */
-        .main { flex: 1; display: flex; flex-direction: column; }
-        .topbar { padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--bg2); }
-        .topbar h2 { font-size: 1rem; font-weight: 500; }
-        .content { flex: 1; overflow-y: auto; padding: 1.5rem; }
-
-        /* Chat */
-        .chat-container { display: flex; flex-direction: column; height: 100%; }
-        .messages { flex: 1; overflow-y: auto; padding-bottom: 1rem; }
-        .msg { max-width: 75%; margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.9rem; line-height: 1.5; }
-        .msg-user { background: var(--accent2); color: white; margin-left: auto; border-bottom-right-radius: 4px; }
-        .msg-ai { background: var(--bg2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-        .msg-role { font-size: 0.65rem; color: var(--text3); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.05em; }
-        .input-area { display: flex; gap: 0.75rem; padding: 1rem 0 0; border-top: 1px solid var(--border); }
-        .input-area input { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 1rem; color: var(--text); font-size: 0.9rem; outline: none; }
-        .input-area input:focus { border-color: var(--accent); }
-        .input-area button { background: var(--accent); color: #0f172a; border: none; border-radius: 10px; padding: 0.75rem 1.25rem; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
-        .input-area button:hover { background: var(--accent2); }
-
-        /* Cards */
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
-        .card h3 { font-size: 0.7rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
-        .card .value { font-size: 1.75rem; font-weight: 700; }
-        .card .sub { font-size: 0.8rem; color: var(--text3); margin-top: 0.25rem; }
-
-        /* Table */
-        table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; padding: 0.6rem; color: var(--text3); font-size: 0.7rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
-        td { padding: 0.6rem; border-bottom: 1px solid var(--bg3); font-size: 0.85rem; }
-        tr:hover { background: var(--bg3); }
-
-        /* Section */
-        .section { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
-        .section h3 { font-size: 0.9rem; margin-bottom: 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border); }
-
-        .badge-green { color: var(--green); } .badge-red { color: var(--red); }
-        pre { background: var(--bg); padding: 1rem; border-radius: 8px; overflow-x: auto; font-size: 0.8rem; color: var(--text2); }
-
-        /* Typing indicator */
-        .typing { display: flex; gap: 4px; padding: 0.5rem; }
-        .typing span { width: 8px; height: 8px; background: var(--text3); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
-        .typing span:nth-child(2) { animation-delay: 0.2s; }
-        .typing span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes bounce { 0%,80%,100% { transform: scale(0); } 40% { transform: scale(1); } }
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --panel-2: #1f2937;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --ok: #22c55e;
+        --warn: #f59e0b;
+        --bad: #ef4444;
+        --blue: #3b82f6;
+      }
+      body { margin: 0; font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); }
+      .app { max-width: 1200px; margin: 0 auto; padding: 1.1rem; }
+      h1 { margin: 0 0 0.9rem; font-size: 1.22rem; color: #fff; }
+      .toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+      button { border: 0; border-radius: 6px; padding: 0.55rem 0.85rem; cursor: pointer; color: #fff; }
+      .start { background: var(--ok); }
+      .stop { background: var(--bad); }
+      .small { background: var(--blue); }
+      .warn { background: var(--warn); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem; }
+      .panel { background: var(--panel); border: 1px solid #374151; border-radius: 12px; padding: 1rem; }
+      .status-light { width: 10px; height: 10px; border-radius: 999px; display: inline-block; margin-right: 0.4rem; }
+      .status-ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(34,197,94,.14); }
+      .status-warn { background: var(--warn); box-shadow: 0 0 0 4px rgba(245,158,11,.12); }
+      .status-bad { background: var(--bad); box-shadow: 0 0 0 4px rgba(239,68,68,.12); }
+      .muted { color: var(--muted); font-size: 0.9rem; }
+      .event-list { max-height: 220px; overflow: auto; background: #030712; border: 1px solid #374151; border-radius: 8px; padding: 0.6rem; font-size: 0.85rem; }
+      .list-item { border-bottom: 1px dashed #334155; padding: 0.35rem 0; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+      th, td { text-align: left; padding: 0.5rem 0.25rem; border-bottom: 1px solid #334155; }
+      .badge { padding: 0.2rem 0.5rem; border-radius: 999px; font-size: 0.75rem; color: #fff; }
+      .ok { background: var(--ok); }
+      .warn-chip { background: var(--warn); }
+      .bad { background: var(--bad); }
+      .modal { display: none; position: fixed; inset: 0; background: rgba(3,7,18,.74); align-items: center; justify-content: center; }
+      .modal-card { width: min(520px, calc(100vw - 2rem)); background: #1f2937; border: 1px solid #334155; border-radius: 10px; padding: 1rem; }
+      .row { display: flex; gap: 0.5rem; }
+      .row input { flex: 1; padding: 0.5rem; border-radius: 6px; border: 1px solid #374151; background: #111827; color: var(--text);}
+      .row button { min-width: 150px; }
+      .toggle-list { display: grid; gap: 0.5rem; }
+      .toggle-item { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+      .checkbox-wrap { display: flex; align-items: center; gap: 0.4rem; }
+      .footnote { font-size: 0.84rem; color: var(--muted); margin-top: 0.4rem; }
+      .footer { margin-top: 1rem; color: var(--muted); font-size: 0.84rem; }
+      .overlay { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.92); z-index: 20; display: none; align-items: center; justify-content: center; padding: 1rem; }
+      .overlay-card { width: min(680px, calc(100vw - 2rem)); background: #1f2937; border: 1px solid #334155; border-radius: 14px; padding: 1rem; }
+      .hidden { display: none; }
+      .step { margin-top: 0.75rem; }
     </style>
-</head>
-<body>
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <h1>🛡️ SafeAgent <span class="version">v0.1.0</span></h1>
-        </div>
-        <div class="nav">
-            <div class="nav-item active" onclick="showPage('chat')"><span class="icon">💬</span> Chat</div>
-            <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">📊</span> Dashboard</div>
-            <div class="nav-item" onclick="showPage('audit')"><span class="icon">📋</span> Audit Log</div>
-            <div class="nav-item" onclick="showPage('skills')"><span class="icon">⚡</span> Skills</div>
-            <div class="nav-item" onclick="showPage('settings')"><span class="icon">⚙️</span> Settings</div>
-        </div>
-        <div class="sidebar-footer">
-            <div class="status"><span class="status-dot"></span> Connected — Balanced Mode</div>
-        </div>
+  </head>
+  <body>
+    <div class="app">
+      <h1>SafeAgent Desktop</h1>
+      <div class="toolbar">
+        <span id="statusDot" class="status-light status-bad"></span>
+        <span id="statusText" class="muted">Stopped</span>
+        <button id="startButton" class="start" onclick="startServices()">Başlat</button>
+        <button class="warn" onclick="restartServices()">Yenile</button>
+        <button id="stopButton" class="stop" onclick="stopServices()">Durdur</button>
+        <button class="small" onclick="createSupportBundle()">Support Bundle</button>
+        <button class="small" onclick="refreshAll()">Yenile</button>
+        <button class="small" onclick="scanApprovals()">Onayları kontrol et</button>
+        <button class="small" onclick="loadMarketplace()">Paketleri yenile</button>
+      </div>
+      <div class="toolbar" style="margin-top: 0.5rem;">
+        <span class="muted">Tray controls:</span>
+        <button class="small" onclick="triggerTrayOpenApp()">Open app</button>
+        <button class="small" onclick="triggerTrayStart()">Start</button>
+        <button class="small" onclick="triggerTrayStop()">Stop</button>
+        <button class="small" onclick="createSupportBundle()">Generate support bundle</button>
+        <button class="small" onclick="quitApp()">Quit</button>
+        <span id="trayMenuText" class="muted"></span>
+      </div>
+
+      <div class="grid">
+        <section class="panel">
+          <h3>Trust / Service Status</h3>
+          <p class="muted">Safety state: <span id="safetyState">-</span></p>
+          <p class="muted">Control-plane: <span id="cpReady">-</span> | Worker: <span id="workerReady">-</span></p>
+          <p class="muted">Desired running: <span id="desiredRunning">-</span></p>
+          <div id="serviceList"></div>
+          <div class="muted" style="margin-top:0.5rem;">
+            Ready endpoints: <span id="pkiText">-</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>Simple Settings</h3>
+          <p class="muted">4 toggle maksimum, tek ekranda güven.</p>
+          <div class="toggle-list">
+            <label class="toggle-item">
+              <span>Güvenli mod (Strict)</span>
+              <span class="checkbox-wrap">
+                <input id="settingStrict" type="checkbox" onchange="saveSettings()" />
+              </span>
+            </label>
+            <label class="toggle-item">
+              <span>Marketplace sadece Verified Publisher</span>
+              <span class="checkbox-wrap">
+                <input id="settingVerified" type="checkbox" onchange="saveSettings()" />
+              </span>
+            </label>
+            <label class="toggle-item">
+              <span>Ağ erişimi sadece allowlist</span>
+              <span class="checkbox-wrap">
+                <input id="settingAllowlist" type="checkbox" onchange="saveSettings()" />
+              </span>
+              <small class="muted">network_policy</small>
+            </label>
+            <label class="toggle-item">
+              <span>Gelişmiş loglar</span>
+              <span class="checkbox-wrap">
+                <input id="settingAdvanced" type="checkbox" onchange="saveSettings()" />
+              </span>
+            </label>
+          </div>
+          <p class="footnote" id="settingsSaved"></p>
+        </section>
+
+        <section class="panel">
+          <h3>Update Check</h3>
+          <p class="muted">Signed update manifest check (ed25519)</p>
+          <div class="row">
+            <input id="manifestPath" placeholder="update.json dosya yolu veya url (boş -> varsayılan)" />
+            <button class="small" onclick="checkForUpdates()">Check for updates</button>
+          </div>
+          <div class="row" style="margin-top:0.5rem;">
+            <input id="publicKeyOverride" placeholder="Opsiyonel public key (base64), boş ise uygulama key'i" />
+            <button class="small" onclick="applyUpdate()">Apply update</button>
+          </div>
+          <p class="muted" id="updateResult">Henüz kontrol edilmedi.</p>
+        </section>
+
+        <section class="panel">
+          <h3>Latest Events</h3>
+          <div id="events" class="event-list"></div>
+        </section>
+
+        <section class="panel">
+          <h3>Marketplace</h3>
+          <p class="muted" id="marketInstallInfo">Installable packages from <code>~/.safeagent-desktop/marketplace</code></p>
+          <table>
+            <thead>
+              <tr><th>Skill</th><th>Status</th><th>Path</th><th>Action</th></tr>
+            </thead>
+            <tbody id="marketplaceBody"></tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h3>Approval Queue</h3>
+          <p class="muted" id="approvalHint">Waiting for pending approvals.</p>
+          <div id="approvalList"></div>
+        </section>
+
+        <section class="panel footer">
+          <h3>Manual command</h3>
+          <div class="row">
+            <input id="customPath" placeholder="Package path (folder) or ~/.safeagent-desktop/marketplace item)" />
+            <button class="small" onclick="installPath()">Install package</button>
+          </div>
+        </section>
+      </div>
     </div>
 
-    <div class="main">
-        <div class="topbar">
-            <h2 id="page-title">Chat</h2>
-            <div style="font-size:0.8rem;color:var(--text3);" id="topbar-info">Streaming Enabled</div>
+    <div id="onboardingWizard" class="overlay">
+      <div class="overlay-card">
+        <h2>SafeAgent'e Hoş Geldiniz</h2>
+        <p class="muted">AI çalıştırmalarını güvenli hale getiren tek ekrandan başlayın.</p>
+        <div id="onboardingStep1" class="step">
+          <p>SafeAgent, araç çağrılarını denetleyen güvenlik katmanını başlatır.</p>
+          <button class="start" onclick="advanceOnboardingStep()">Başlat</button>
         </div>
-
-        <!-- Chat Page -->
-        <div class="content" id="page-chat" style="padding:0;">
-            <div class="chat-container" style="height:100%;padding:1.5rem;">
-                <div class="messages" id="messages">
-                    <div class="msg msg-ai">
-                        <div class="msg-role">🤖 SafeAgent</div>
-                        Merhaba! Ben SafeAgent — guvenli, maliyet-optimize AI asistanin. Nasil yardimci olabilirim?
-                    </div>
-                </div>
-                <div class="input-area">
-                    <input type="text" id="chat-input" placeholder="Mesajinizi yazin..." onkeydown="if(event.key==='Enter')sendMessage()">
-                    <button onclick="sendMessage()">Gonder</button>
-                </div>
-            </div>
+        <div id="onboardingStep2" class="step hidden">
+          <p>Kurulum güvenliği için 4 ayarı onaylayın.</p>
+          <div class="toggle-list">
+            <label class="toggle-item"><span>Güvenli mod (Strict)</span><input id="wizardStrict" type="checkbox" checked /></label>
+            <label class="toggle-item"><span>Marketplace sadece Verified Publisher</span><input id="wizardVerified" type="checkbox" checked /></label>
+            <label class="toggle-item"><span>Ağ erişimi sadece allowlist</span><input id="wizardAllowlist" type="checkbox" checked /></label>
+            <label class="toggle-item"><span>Gelişmiş loglar</span><input id="wizardAdvanced" type="checkbox" /></label>
+          </div>
+          <p><button class="start" onclick="completeOnboarding()">Bitti</button></p>
         </div>
+      </div>
+    </div>
 
-        <!-- Dashboard Page -->
-        <div class="content" id="page-dashboard" style="display:none;">
-            <div class="grid" id="stat-cards">
-                <div class="card"><h3>Total Requests</h3><div class="value" id="stat-requests">0</div></div>
-                <div class="card"><h3>Total Cost</h3><div class="value" id="stat-cost">$0.00</div><div class="sub">USD</div></div>
-                <div class="card"><h3>Input Tokens</h3><div class="value" id="stat-input">0</div></div>
-                <div class="card"><h3>Output Tokens</h3><div class="value" id="stat-output">0</div></div>
-                <div class="card"><h3>Cache Hits</h3><div class="value" id="stat-cache">0</div><div class="sub">tokens read from cache</div></div>
-                <div class="card"><h3>Routing Accuracy</h3><div class="value">97.5%</div><div class="sub">140 prompt eval</div></div>
-            </div>
-            <div class="section">
-                <h3>Model Usage</h3>
-                <table>
-                    <tr><th>Model</th><th>Tier</th><th>Requests</th><th>Cost</th></tr>
-                    <tr><td>claude-haiku-4-5</td><td>Economy</td><td id="m-haiku-req">0</td><td id="m-haiku-cost">$0.00</td></tr>
-                    <tr><td>claude-sonnet-4-5</td><td>Standard</td><td id="m-sonnet-req">0</td><td id="m-sonnet-cost">$0.00</td></tr>
-                    <tr><td>claude-opus-4-6</td><td>Premium</td><td id="m-opus-req">0</td><td id="m-opus-cost">$0.00</td></tr>
-                </table>
-            </div>
+    <div id="approvalModal" class="modal" onclick="if(event.target===this)closeModal()">
+      <div class="modal-card">
+        <h3>Onay İsteği</h3>
+        <p id="approvalPrompt" class="muted">Bu işlem güvenlik nedeniyle onay gerektiriyor.</p>
+        <div id="approvalPromptMeta" class="muted"></div>
+        <p id="approvalCountdown" class="muted"></p>
+        <div class="toolbar">
+          <button class="start" onclick="approveCurrent()">İzin Ver</button>
+          <button class="stop" onclick="denyCurrent()">Engelle</button>
+          <button class="small" onclick="closeModal()">Kapat</button>
         </div>
-
-        <!-- Audit Page -->
-        <div class="content" id="page-audit" style="display:none;">
-            <div class="section">
-                <h3>Recent Events</h3>
-                <table>
-                    <tr><th>Time</th><th>Event</th><th>Model</th><th>Tokens</th><th>Cost</th><th>Status</th></tr>
-                    <tbody id="audit-body">
-                        <tr><td colspan="6" style="color:var(--text3);text-align:center;">No events yet. Start chatting to generate audit entries.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Skills Page -->
-        <div class="content" id="page-skills" style="display:none;">
-            <div class="grid">
-                <div class="card"><h3>Read Skills</h3><div class="value" style="font-size:1.2rem;">
-                    ✅ Web Search<br>✅ URL Fetcher<br>✅ File Reader<br>✅ Calendar Reader<br>✅ Email Reader<br>✅ Image Processor
-                </div></div>
-                <div class="card"><h3>Write Skills</h3><div class="value" style="font-size:1.2rem;">
-                    🔒 File Writer<br>🔒 Calendar Writer<br>🔒 Email Sender<br>🔒 Browser Control<br>�� Shell Executor
-                </div><div class="sub">Deny-all by default. Enable in settings.</div></div>
-                <div class="card"><h3>Voice</h3><div class="value" style="font-size:1.2rem;">
-                    ✅ Whisper STT<br>✅ OpenAI TTS
-                </div></div>
-            </div>
-            <div class="section">
-                <h3>MCP Server</h3>
-                <p style="color:var(--text2);font-size:0.85rem;">
-                    MCP endpoint: <code>http://localhost:18789/mcp</code><br>
-                    8 tools exposed via JSON-RPC 2.0. Use with Claude Desktop, Cursor, or any MCP client.
-                </p>
-            </div>
-        </div>
-
-        <!-- Settings Page -->
-        <div class="content" id="page-settings" style="display:none;">
-            <div class="section">
-                <h3>Configuration (safeagent.toml)</h3>
-                <pre id="config-display">[general]
-log_level = "info"
-
-[router]
-mode = "balanced"
-confidence_preset = "balanced"
-
-[limits]
-daily_spend_usd = 5.0
-monthly_spend_usd = 50.0
-
-[skills.web_search]
-enabled = true
-
-[skills.file_writer]
-enabled = false
-allowed_dirs = []
-
-[skills.email_sender]
-enabled = false
-allowed_recipients = []
-daily_limit = 20
-require_confirmation = true
-
-[skills.browser_control]
-enabled = false
-allowed_domains = []
-
-[skills.shell_executor]
-enabled = false
-allowed_commands = []</pre>
-            </div>
-            <div class="section">
-                <h3>Security</h3>
-                <p style="color:var(--text2);font-size:0.85rem;">
-                    🔐 AES-256 Encrypted Vault (Argon2id KDF)<br>
-                    🛡️ Prompt Injection Guard (normalized matching)<br>
-                    �� Full Audit Logging (secret redaction)<br>
-                    🔑 OS Keychain Integration (macOS/Linux)
-                </p>
-            </div>
-        </div>
+        <p class="muted">İşlem: red action, kaynak: kullanıcı onayı</p>
+        <p class="muted">30 saniye içinde yanıt vermezseniz engellenecek.</p>
+      </div>
     </div>
 
     <script>
-        function showPage(page) {
-            document.querySelectorAll('.content').forEach(p => p.style.display = 'none');
-            document.getElementById('page-' + page).style.display = '';
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-            const titles = { chat: 'Chat', dashboard: 'Dashboard', audit: 'Audit Log', skills: 'Skills', settings: 'Settings' };
-            document.getElementById('page-title').textContent = titles[page] || page;
+      const APPROVAL_TIMEOUT_MS = 30000;
+      let pendingApprovals = [];
+      let activeApprovalId = "";
+      let activeApprovalSource = "";
+      let activeApprovalSkill = "";
+      let approvalTimer = null;
+      let approvalDeadlineMs = 0;
+      let onboarded = false;
+
+      const invoke = (name, payload) => {
+        if (!window.__TAURI__ || !window.__TAURI__.core || !window.__TAURI__.core.invoke) {
+          throw new Error("Tauri runtime not available.");
         }
+        return window.__TAURI__.core.invoke(name, payload || {});
+      };
 
-        let messages = [];
-        function sendMessage() {
-            const input = document.getElementById('chat-input');
-            const text = input.value.trim();
-            if (!text) return;
-            input.value = '';
-
-            const container = document.getElementById('messages');
-            container.innerHTML += `<div class="msg msg-user"><div class="msg-role">👤 You</div>${escapeHtml(text)}</div>`;
-            container.innerHTML += `<div class="msg msg-ai" id="typing"><div class="typing"><span></span><span></span><span></span></div></div>`;
-            container.scrollTop = container.scrollHeight;
-
-            // Simulate response (in real app, this calls the backend)
-            setTimeout(() => {
-                const typing = document.getElementById('typing');
-                if (typing) {
-                    typing.innerHTML = `<div class="msg-role">🤖 SafeAgent</div>Bu bir demo gorunumdur. Gercek kullanim icin <code>safeagent run</code> calistirin ve Web UI'a <code>http://localhost:18789</code> uzerinden baglanin.`;
-                    typing.removeAttribute('id');
-                }
-                container.scrollTop = container.scrollHeight;
-            }, 1500);
+      const setStatus = (running, cp, worker, safetyState) => {
+        const statusDot = document.getElementById("statusDot");
+        const statusText = document.getElementById("statusText");
+        const stateLabel = document.getElementById("safetyState");
+        if (safetyState === "green") {
+          statusDot.className = "status-light status-ok";
+          statusText.textContent = running ? "Çalışıyor" : "Hazır";
+          stateLabel.textContent = "Güvenli";
+        } else if (safetyState === "yellow") {
+          statusDot.className = "status-light status-warn";
+          statusText.textContent = "Kademeli başlatma";
+          stateLabel.textContent = "Kırmızıdan kurtarma";
+        } else if (safetyState === "red") {
+          statusDot.className = "status-light status-bad";
+          statusText.textContent = "Kritik";
+          stateLabel.textContent = "Kırmızı: manuel yeniden başlatma gerekli";
+        } else {
+          statusDot.className = "status-light status-bad";
+          statusText.textContent = "Durdu";
+          stateLabel.textContent = "Durduruldu";
         }
-
-        function escapeHtml(text) {
-            return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        document.getElementById("cpReady").textContent = cp ? "hazır" : "kapanık";
+        document.getElementById("workerReady").textContent = worker ? "hazır" : "kapanık";
+        const startButton = document.getElementById("startButton");
+        const stopButton = document.getElementById("stopButton");
+        if (running) {
+          startButton.textContent = "Tekrar Başlat";
+          stopButton.textContent = "Durdur";
+          stopButton.disabled = false;
+        } else {
+          startButton.textContent = "Başlat";
+          stopButton.textContent = "Durdur";
         }
+      };
 
-        // Fetch stats from backend if available
-        async function loadStats() {
-            try {
-                const r = await fetch('http://localhost:18789/api/stats');
-                const d = await r.json();
-                if (d.summary) {
-                    document.getElementById('stat-requests').textContent = d.summary.total_requests || 0;
-                    document.getElementById('stat-cost').textContent = '$' + (d.summary.total_cost_usd || '0.0000');
-                    document.getElementById('stat-input').textContent = (d.summary.total_input_tokens || 0).toLocaleString();
-                    document.getElementById('stat-output').textContent = (d.summary.total_output_tokens || 0).toLocaleString();
-                    document.getElementById('stat-cache').textContent = (d.summary.cache_read_tokens || 0).toLocaleString();
-                }
-            } catch(e) { /* backend not running */ }
+      const statusBadge = (value) => {
+        if (value === "installable") return `<span class="badge ok">${value}</span>`;
+        if (value === "blocked") return `<span class="badge bad">${value}</span>`;
+        if (value === "invalid_package" || value === "not_found") return `<span class="badge warn-chip">${value}</span>`;
+        return `<span class="badge warn-chip">${value}</span>`;
+      };
+
+      const renderService = (status) => {
+        const serviceList = document.getElementById("serviceList");
+        const rows = [];
+        const services = [status.control_plane, status.worker];
+        services.forEach((svc) => {
+          if (!svc) return;
+          rows.push(`${svc.name} — PID: ${svc.pid} — Yeniden başlatma: ${svc.restart_count} — Durum: ${svc.state}`);
+        });
+        serviceList.innerHTML = rows.length
+          ? rows.map((row) => `<div class=\"list-item\">${row}</div>`).join("")
+          : `<div class=\"muted\">Henüz süreç bilgisi yok.</div>`;
+      };
+
+      const renderEvents = (events) => {
+        const eventsEl = document.getElementById("events");
+        eventsEl.innerHTML = events.length
+          ? events.map((line) => `<div class=\"list-item\">${line}</div>`).join("")
+          : `<div class=\"muted\">Henüz olay yok.</div>`;
+      };
+
+      const renderApprovals = (approvals) => {
+        const box = document.getElementById("approvalList");
+        if (!approvals.length) {
+          box.innerHTML = `<div class=\"muted\">Bekleyen onay yok.</div>`;
+          return;
         }
-        loadStats();
-        setInterval(loadStats, 10000);
+        box.innerHTML = approvals
+          .map((item) => `<div class=\"list-item\"><strong>${item.skill_id}</strong> — ${item.input_summary}<br/><span class=\"muted\">${item.approval_id}</span></div>`)
+          .join("");
+      };
+
+      const renderMarketplace = (skills) => {
+        const body = document.getElementById("marketplaceBody");
+        if (!skills.length) {
+          body.innerHTML = `<tr><td colspan=\"4\" class=\"muted\">Paket klasörü boş.</td></tr>`;
+          return;
+        }
+        body.innerHTML = skills.map((skill) => {
+          const canInstall = skill.status === "installable";
+          return `
+            <tr>
+              <td>${skill.name}</td>
+              <td>${statusBadge(skill.status)}</td>
+              <td class=\"muted\">${skill.path}</td>
+              <td>${canInstall ? `<button class=\"small\" onclick=\"installByPath('${skill.path.replaceAll("\\", "\\\\")}')\">Yükle</button>` : "-"}</td>
+            </tr>`;
+        }).join("");
+      };
+
+      const updateOnboardingUI = (state) => {
+        const wizard = document.getElementById("onboardingWizard");
+        const step1 = document.getElementById("onboardingStep1");
+        const step2 = document.getElementById("onboardingStep2");
+        if (state.completed) {
+          wizard.style.display = "none";
+          onboarded = true;
+          return;
+        }
+        wizard.style.display = "flex";
+        onboarded = false;
+        if (state.current_step >= 2) {
+          step1.classList.add("hidden");
+          step2.classList.remove("hidden");
+        } else {
+          step1.classList.remove("hidden");
+          step2.classList.add("hidden");
+        }
+      };
+
+      const updateWizardSettingsFromApp = async () => {
+        const settings = await invoke("get_settings");
+        document.getElementById("wizardStrict").checked = settings.strict_mode;
+        document.getElementById("wizardVerified").checked = settings.verified_publisher_only;
+        document.getElementById("wizardAllowlist").checked = settings.allowlist_network_only;
+        document.getElementById("wizardAdvanced").checked = settings.advanced_logs;
+      };
+
+      const saveSettings = async () => {
+        const payload = {
+          strict_mode: document.getElementById("settingStrict").checked,
+          verified_publisher_only: document.getElementById("settingVerified").checked,
+          allowlist_network_only: document.getElementById("settingAllowlist").checked,
+          advanced_logs: document.getElementById("settingAdvanced").checked,
+        };
+        await invoke("update_settings", { settings: payload });
+        document.getElementById("settingsSaved").textContent = "Ayarlar kaydedildi.";
+      };
+
+      const saveWizardSettings = async () => {
+        const payload = {
+          strict_mode: document.getElementById("wizardStrict").checked,
+          verified_publisher_only: document.getElementById("wizardVerified").checked,
+          allowlist_network_only: document.getElementById("wizardAllowlist").checked,
+          advanced_logs: document.getElementById("wizardAdvanced").checked,
+        };
+        await invoke("update_settings", { settings: payload });
+        document.getElementById("settingStrict").checked = payload.strict_mode;
+        document.getElementById("settingVerified").checked = payload.verified_publisher_only;
+        document.getElementById("settingAllowlist").checked = payload.allowlist_network_only;
+        document.getElementById("settingAdvanced").checked = payload.advanced_logs;
+        document.getElementById("settingsSaved").textContent = "Ayarlar kaydedildi.";
+      };
+
+      const advanceOnboardingStep = async () => {
+        const state = await invoke("advance_onboarding");
+        updateOnboardingUI(state);
+        if (!state.completed && state.current_step >= 2) {
+          await updateWizardSettingsFromApp();
+        }
+      };
+
+      const completeOnboardingFlow = async () => {
+        await saveWizardSettings();
+        const state = await invoke("complete_onboarding_flow");
+        updateOnboardingUI(state);
+      };
+
+      const completeOnboarding = completeOnboardingFlow;
+
+      const loadSettings = async () => {
+        const settings = await invoke("get_settings");
+        document.getElementById("settingStrict").checked = settings.strict_mode;
+        document.getElementById("settingVerified").checked = settings.verified_publisher_only;
+        document.getElementById("settingAllowlist").checked = settings.allowlist_network_only;
+        document.getElementById("settingAdvanced").checked = settings.advanced_logs;
+        document.getElementById("settingsSaved").textContent = "Ayarlar yüklendi.";
+      };
+
+      const checkForUpdates = async () => {
+        const manifestPath = document.getElementById("manifestPath").value.trim();
+        const publicKey = document.getElementById("publicKeyOverride").value.trim() || null;
+        const result = await invoke("check_for_updates", { manifest_path: manifestPath || null, public_key_b64: publicKey });
+        if (!result || !result.manifest_present) {
+          document.getElementById("updateResult").textContent = result?.message || "Manifest bulunamadı.";
+          return;
+        }
+        const state = result.safe ? "Güvenli" : "Güvenli değil";
+        document.getElementById("updateResult").textContent =
+          `Mevcut: ${result.current_version}, Son: ${result.latest_version}, Güncelleme: ${result.update_available ? "Var" : "Yok"}, İmza: ${result.signature_valid ? "Geçerli" : "Geçersiz"}, Hash: ${result.asset_sha256_ok ? "OK" : "X"}, Durum: ${state}, Mesaj: ${result.message || "OK"}`;
+      };
+
+      const applyUpdate = async () => {
+        const manifestPath = document.getElementById("manifestPath").value.trim();
+        const publicKey = document.getElementById("publicKeyOverride").value.trim() || null;
+        const result = await invoke("check_for_updates", {
+          manifest_path: manifestPath || null,
+          public_key_b64: publicKey,
+        });
+        if (!result || !result.safe) {
+          const reason = result?.message || "Güncelleme güvenli değil.";
+          alert(`Güncelleme uygulanamadı: ${reason}`);
+          return;
+        }
+        alert("İmza doğrulandı. Gerçek güncelleme alımı burada uygulanacak (placeholder).");
+      };
+
+      const createSupportBundle = async () => {
+        const path = await invoke("create_support_bundle");
+        alert(`Support bundle hazır: ${path}`);
+        await refreshAll();
+      };
+
+      const refreshStatus = async () => {
+        const status = await invoke("get_status");
+        setStatus(status.desired_running, status.control_plane_ready, status.worker_ready, status.safety_state);
+        renderService(status);
+        if (!status.last_events || status.last_events.length === 0) {
+          await loadRecentEvents();
+        } else {
+          renderEvents(status.last_events || []);
+        }
+        document.getElementById("desiredRunning").textContent = status.desired_running ? "true" : "false";
+      };
+
+      const loadMarketplace = async () => {
+        const skills = await invoke("list_marketplace_skills");
+        renderMarketplace(skills);
+      };
+
+      const loadRecentEvents = async () => {
+        const events = await invoke("get_human_recent_events", { lines: 50 });
+        renderEvents(events);
+      };
+
+      const updateTrayText = async () => {
+        try {
+          const items = await invoke("get_tray_menu");
+          const trayText = items.map((item) => item.label).join(" / ");
+          document.getElementById("trayMenuText").textContent = trayText;
+        } catch (_error) {
+          document.getElementById("trayMenuText").textContent = "Tray menüsü yüklenemedi.";
+        }
+      };
+
+      const refreshAll = async () => {
+        await refreshStatus();
+        await loadMarketplace();
+        await loadRecentEvents();
+        await scanApprovals();
+      };
+
+      const scanApprovals = async () => {
+        const approvals = await invoke("poll_pending_approvals");
+        pendingApprovals = approvals || [];
+        renderApprovals(pendingApprovals);
+        if (pendingApprovals.length > 0) {
+          const first = pendingApprovals[0];
+          activeApprovalId = first.approval_id;
+          activeApprovalSkill = first.skill_id || "Bilinmiyor";
+          activeApprovalSource = first.node_id || "kontrol-plane";
+          document.getElementById("approvalPrompt").textContent =
+            first.reason ? `${first.reason}` : "Bu işlem güvenlik nedeniyle onay gerektiriyor.";
+          const summary = first.input_summary ? `\\nÖzet: ${first.input_summary}` : "";
+          document.getElementById("approvalPromptMeta").textContent = `İşlem: ${activeApprovalSkill}\\nKaynak: ${activeApprovalSource}${summary}`;
+          document.getElementById("approvalModal").style.display = "flex";
+          startApprovalTimer();
+        }
+      };
+
+      const showError = (message) => alert(message);
+
+      const clearApprovalTimer = () => {
+        if (approvalTimer) {
+          clearInterval(approvalTimer);
+          approvalTimer = null;
+        }
+      };
+
+      const startApprovalTimer = () => {
+        clearApprovalTimer();
+        approvalDeadlineMs = Date.now() + APPROVAL_TIMEOUT_MS;
+        const countdown = document.getElementById("approvalCountdown");
+        const updateCounter = () => {
+          const remaining = Math.max(0, Math.ceil((approvalDeadlineMs - Date.now()) / 1000));
+          countdown.textContent = `30 saniye içinde yanıt vermezseniz engellenecek. Kalan: ${remaining} sn`;
+          if (remaining <= 0) {
+            denyCurrent();
+          }
+        };
+        updateCounter();
+        approvalTimer = setInterval(updateCounter, 1000);
+      };
+
+      const closeModal = () => {
+        clearApprovalTimer();
+        document.getElementById("approvalModal").style.display = "none";
+        document.getElementById("approvalCountdown").textContent = "";
+      };
+
+      const approveCurrent = async () => {
+        if (!activeApprovalId) return;
+        try {
+          await invoke("approve", { approval_id: activeApprovalId });
+        } finally {
+          closeModal();
+          await refreshAll();
+        }
+      };
+
+      const denyCurrent = async () => {
+        if (!activeApprovalId) {
+          closeModal();
+          return;
+        }
+        try {
+          await invoke("deny", { approval_id: activeApprovalId });
+        } finally {
+          closeModal();
+          await refreshAll();
+        }
+      };
+
+      const startServices = async () => {
+        const stopButton = document.getElementById("stopButton");
+        const startButton = document.getElementById("startButton");
+        startButton.disabled = true;
+        stopButton.disabled = true;
+        try {
+          await invoke("start_services");
+          await refreshAll();
+        } catch (error) {
+          showError(`Başlatma başarısız: ${error}`);
+        } finally {
+          startButton.disabled = false;
+          stopButton.disabled = false;
+        }
+      };
+
+      const stopServices = async () => {
+        const stopButton = document.getElementById("stopButton");
+        const old = stopButton.textContent;
+        stopButton.textContent = "Kapanıyor...";
+        stopButton.disabled = true;
+        try {
+          await invoke("stop_services");
+          await refreshAll();
+        } catch (error) {
+          showError(`Durdurma başarısız: ${error}`);
+        } finally {
+          stopButton.textContent = old || "Durdur";
+          stopButton.disabled = false;
+        }
+      };
+
+      const restartServices = async () => {
+        try {
+          await stopServices();
+          await startServices();
+        } catch (error) {
+          showError(`Yenileme başarısız: ${error}`);
+        }
+      };
+
+      const triggerTrayOpenApp = () => {
+        document.getElementById("onboardingWizard").scrollIntoView({ behavior: "smooth", block: "start" });
+      };
+
+      const triggerTrayStop = async () => {
+        await stopServices();
+      };
+
+      const triggerTrayStart = async () => {
+        await startServices();
+      };
+
+      const triggerTraySupport = async () => {
+        await createSupportBundle();
+      };
+
+      const quitApp = async () => {
+        await stopServices();
+        await invoke("quit_app");
+      };
+
+      const loadOnboarding = async () => {
+        try {
+          const state = await invoke("get_onboarding_state");
+          updateOnboardingUI(state);
+          if (!state.completed) {
+            await updateWizardSettingsFromApp();
+          }
+        } catch (error) {
+          console.error("onboarding load error", error);
+          onboarded = false;
+        }
+      };
+
+      const installByPath = async (path) => {
+        const response = await invoke("install_marketplace_skill", { package_path: path });
+        alert(`Kurulum: ${response.installed ? "kabul edildi" : "engellendi"} — ${response.detail}`);
+        await loadMarketplace();
+        await refreshAll();
+      };
+
+      const installPath = async () => {
+        const path = document.getElementById("customPath").value.trim();
+        if (!path) return;
+        const response = await invoke("install_marketplace_skill", { package_path: path });
+        alert(`Kurulum: ${response.installed ? "kabul edildi" : "engellendi"} — ${response.detail}`);
+        await refreshAll();
+      };
+
+      const refreshLoop = async () => {
+        await refreshAll();
+        await updateTrayText();
+      };
+
+      (async () => {
+        await loadSettings();
+        await updateWizardSettingsFromApp();
+        await loadOnboarding();
+        await refreshAll();
+        await updateTrayText();
+        refreshLoop();
+        setInterval(() => {
+          refreshLoop().catch((error) => console.error(error));
+        }, 4000);
+      })().catch((error) => {
+        console.error(error);
+      });
     </script>
-</body>
+  </body>
 </html>

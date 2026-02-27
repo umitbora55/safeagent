@@ -1,0 +1,9 @@
+id = "sample.safeagent.echo"
+name = "sample-safe-skill"
+version = "0.1.0"
+entrypoint = "entry.sh"
+description = "Sample deterministic demo skill for marketplace signing and scanning"
+required_scopes = ["skill:echo"]
+publisher_id = "sample-publisher"
+signing_key_id = "sample-key-01"
+files = ["entry.sh"]

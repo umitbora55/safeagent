@@ -15,6 +15,14 @@ fn default_nonce() -> String {
     String::new()
 }
 
+fn default_kid() -> String {
+    String::new()
+}
+
+fn default_iat() -> u64 {
+    0
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct NodeId(pub String);
 
@@ -30,10 +38,14 @@ pub struct Claims {
     pub tenant_id: TenantId,
     pub user_id: UserId,
     pub scopes: Vec<String>,
+    #[serde(default = "default_kid")]
+    pub kid: String,
     #[serde(default = "default_exp")]
     pub exp: u64,
     #[serde(default = "default_nbf")]
     pub nbf: u64,
+    #[serde(default = "default_iat")]
+    pub iat: u64,
     #[serde(default = "default_nonce")]
     pub nonce: String,
 }

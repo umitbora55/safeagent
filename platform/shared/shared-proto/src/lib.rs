@@ -111,6 +111,7 @@ pub struct IssueTokenResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlPlaneExecuteRequest {
     pub subject: String,
+    pub tenant_id: TenantId,
     pub skill_id: String,
     pub input: String,
     pub request_id: String,
@@ -119,6 +120,7 @@ pub struct ControlPlaneExecuteRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecuteRequest {
     pub token: String,
+    pub tenant_id: TenantId,
     pub skill_id: String,
     pub input: String,
     pub request_id: String,
@@ -130,4 +132,32 @@ pub struct ExecuteResponse {
     pub output: String,
     pub error: Option<String>,
     pub audit_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenHeader {
+    pub alg: String,
+    pub kid: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Jwk {
+    pub kty: String,
+    pub crv: String,
+    pub x: String,
+    pub kid: String,
+    pub alg: String,
+    #[serde(rename = "use")]
+    pub r#use: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Jwks {
+    pub keys: Vec<Jwk>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RotateKeysResponse {
+    pub active_kid: String,
+    pub rotated_kid: String,
 }

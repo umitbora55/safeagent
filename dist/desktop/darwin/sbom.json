@@ -1,0 +1,19 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "safeagent-desktop-release",
+      "version": "0.1.0"
+    }
+  },
+  "components": [
+    {"type": "application", "name": "safeagent-desktop"},
+    {"type": "application", "name": "safeagent-control-plane"},
+    {"type": "application", "name": "safeagent-worker"},
+    {"type": "application", "name": "safeagent-skill"},
+    {"type": "application", "name": "safeagent-skill-registry-server"}
+  ]
+}

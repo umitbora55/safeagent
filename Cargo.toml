@@ -20,6 +20,10 @@ members = [
     "crates/policy-conformance-runner",
     "crates/security-harness",
     "desktop",
+    "crates/sdk-rust",
+    "platform/worker/skills-sdk",
+    "crates/skill-registry",
+    "crates/skill-registry-server",
 ]
 
 [workspace.package]

@@ -1,0 +1,84 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  desktop-release:
+    name: Build desktop artifacts and publish update channel
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install just
+        run: |
+          if ! command -v just >/dev/null 2>&1; then
+            cargo install just --locked
+          fi
+
+      - name: Build desktop release bundle
+        run: scripts/build_desktop_release.sh
+
+      - name: Publish update channel manifest
+        run: scripts/publish_update_channel.sh dist/desktop/linux/safeagent-desktop
+
+      - name: Run desktop update checks
+        run: just desktop-update-check
+
+      - name: Run verify-v2 gate
+        run: just verify-v2
+
+      - name: Collect release files
+        run: |
+          mkdir -p release-files/desktop
+          mkdir -p release-files/updates
+          cp -r dist/desktop/* release-files/desktop/
+          cp -r dist/updates/* release-files/updates/
+
+          (
+            cd release-files
+            find . -maxdepth 3 -type f | sort > ../release-checklist.txt
+            echo "## Desktop release file list" > ../release-summary.txt
+            echo '```' >> ../release-summary.txt
+            cat ../release-checklist.txt >> ../release-summary.txt
+            echo '```' >> ../release-summary.txt
+          )
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: safeagent-desktop-${{ github.ref_name }}
+          path: |
+            release-files/desktop
+            release-files/updates
+            dist/desktop/README.txt
+            dist/desktop/linux/README.txt
+            dist/desktop/linux/sbom.json
+            dist/desktop/linux/checksums.sha256
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/desktop/linux/*
+            dist/desktop/linux/config/*
+            dist/updates/update.json
+            dist/updates/update.sig
+            dist/desktop/linux/checksums.sha256
+            dist/desktop/linux/sbom.json
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
